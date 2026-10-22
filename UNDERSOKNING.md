@@ -9,13 +9,15 @@ Senast uppdaterad 2026-10-23. Aktiv Chrome-profil: `Default`. ChatGPT-tillägg: 
 - När ChatGPTs webbläsaragent tar en vanlig flik i arbete kan tillägget injicera `content-scripts/codex.js` där. Det ändrar sidans favicon till en SVG-märkt variant. Koden använder lägena `active`, `deliverable` och `handoff`; bakgrundskoden härleder `active` från en aktiv agentkoppling till fliken.
 - Blinka 0.5.1 observerade `active` via `tabs.onUpdated` och `favIconUrl` med rätt `tabId` i användarens verkliga sidopanelsarbetsflöde. Detta skedde både när användaren stannade på arbetsfliken och när användaren bytte flik. I det senare fallet visade popupen efteråt `Nu: ingen. Senast: aktiv`.
 - ChatGPTs `deliverable`/`handoff` används bara för särskilt markerade agentflikar, och ett slutmärke behålls bara om fliken inte är synlig när turen avslutas. Inget sådant märke sågs i användarens prov. Övergången `active → ingen` är inte en säker signal för klart, väntan eller fel.
-- Det manuella färgtestet har tidigare verifierats: flera väntande jobb i samma grupp håller signalen aktiv tills alla kvitteras; basfärgen återställs efteråt. MV3-alarm driver färgväxlingen, så den är inte kontinuerlig i millisekundskala. Yttre färgändring pausar testet för att undvika skrivkonflikt med användaren eller ChatGPT.
+- Ett manuellt färgtest verifierade tidigare att flikgrupper kan växla färg och återställas efter kvittering. Det testet var frikopplat från ChatGPTs arbete och är borttaget i version 0.7.0.
 
 ## Beslut i version 0.6.0
 
 Parning av flik till extern server, kopierad starttext, MCP-plugin, modellrapporterade statuslägen och signalserver har tagits bort. Privata Blinka-testpluginer har avinstallerats. Cloudflare Worker `blinka-signal` och D1-databasen med samma namn har raderats; den lokala användartjänsten `blinka-signal.service` har stoppats och tagits bort. Historiken finns i Git om en framtida undersökning behöver jämföra metoder.
 
-Blinka observerar nu endast favicon-markören och ger ett separat manuellt färgtest. Den gör **ingen automatisk bedömning av färdig uppgift**. Nästa tekniska fråga är om agentens webbläsararbetsflöde ger en mer specifik, observerbar slut- eller överlämningssignal. En paus eller försvunnen `active`-markör räcker inte som bevis.
+Version 0.7.0 tar även bort det manuella färgtestet, färgalarm, jobb och kvitteringsknappar. Vid uppdateringen återställs en grupps basfärg bara om den fortfarande har den färg Blinka senast satte; yttre ändringar skrivs inte över. `tabGroups` och `alarms` finns tillfälligt kvar som behörigheter för denna engångsstädning.
+
+Blinka observerar nu endast favicon-markören. Den gör **ingen automatisk bedömning av färdig uppgift**. Nästa tekniska fråga är om agentens webbläsararbetsflöde ger en mer specifik, observerbar slut- eller överlämningssignal. En paus eller försvunnen `active`-markör räcker inte som bevis.
 
 ## Källor
 
