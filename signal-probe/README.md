@@ -51,3 +51,12 @@ Ett uttryckligt anrop med `probe_id`
 loggades av servern `2026-10-22T19:27:01.922Z`. Användaren såg den parade
 gruppen bli röd. Detta verifierar den sammanhängande transportvägen, men
 inte att modellen skulle anropa verktyget automatiskt vid ett arbetsläge.
+
+Ett senare beteendeprov ändrade serverns instruktion och verktygsbeskrivning
+så att modellen ombads signalera efter en ofarlig uppgift när meddelandet
+innehöll ett parnings-ID. Pluginens verktyg lästes in igen. I sidopanelen
+skickade användaren endast ID:t och frågan `Vad är 7 + 5?`, utan att nämna
+verktyget. Servern loggade `signalera` för ID:t
+`814bb4cb-099d-4c17-a5ef-3621939fcf67` kl. `19:38:17.853Z`, och gruppen
+blev sedan röd. Detta är ett positivt prov av modellens följsamhet, ingen
+garanterad livscykelsignal.
