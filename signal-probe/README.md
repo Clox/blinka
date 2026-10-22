@@ -1,11 +1,13 @@
 # Minimalt MCP-parningsprov
 
-Den här servern har ett enda MCP-verktyg: `signalera({probe_id})`. Blinka
-registrerar först ett slumpmässigt parnings-ID via `/pair` och hämtar en
-händelse via `/events` med ett separat lästoken. Verktyget köar en händelse
-för rätt parnings-ID, skriver ID och tid till terminalen och returnerar ett
-kvitto. Servern läser ingen konversation och vet inte vilken Chrome-flik ID:t
-hör till; den kopplingen finns endast i Blinkas lokala lagring.
+Den här servern har ett enda MCP-verktyg: `signalera({probe_id, lage})`. Blinka
+registrerar först ett slumpmässigt parnings-ID via `/pair` och hämtar numrerade
+händelser via `/events` med ett separat lästoken och en läsposition. Samma
+parning kan signalera flera gånger under högst fyra timmar. `/unpair` avslutar
+parningen. Verktyget köar ett modellrapporterat läge för rätt ID, loggar ID,
+läge och tid och returnerar ett kvitto. Servern läser ingen konversation och
+vet inte vilken Chrome-flik ID:t hör till; den kopplingen finns endast i
+Blinkas lokala lagring. Servern lagrar parningar endast i minnet.
 
 ## Lokalt prov
 
@@ -13,6 +15,7 @@ hör till; den kopplingen finns endast i Blinkas lokala lagring.
 cd /home/oscar/projects/blinka/signal-probe
 npm install
 npm start
+npm test
 ```
 
 MCP-adressen blir `http://127.0.0.1:8787/mcp`. Servern lyssnar endast lokalt.
@@ -88,3 +91,10 @@ Avslutsprovet lyckades: servern loggade `signalera` för
 `4580345c-cd2d-43b2-baad-f948e261f1d6` med `lage: klar` kl.
 `2026-10-22T21:05:57.831Z`, och användaren såg gruppen växla färg.
 Blinka 0.3.0 visar nu det rapporterade läget i popupen för nya MCP-jobb.
+
+I version 0.4.0 kan `/events` leverera flera händelser per parning. Ett
+automatiskt MCP- och HTTP-prov skickar först `vantar_pa_svar`, sedan `klar`,
+och kontrollerar att läspositionen hindrar dubbletter och att lästokenet krävs.
+Pluginen **Blinka statusprov 3** har läst in den nya verktygsbeskrivningen för
+återanvändning av ID i samma chatt. Detta beteende är ännu inte testat i en
+verklig sidopanelschatt.

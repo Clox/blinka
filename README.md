@@ -1,6 +1,6 @@
 # Blinka – första tekniska provet
 
-Detta är ett fristående Manifest V3-tillägg för provning av en kvitterbar färgsignal. Version 0.3.0 kan ta emot ett **modellrapporterat läge** via ett parat MCP-verktyg och visa det vid det väntande jobbet. Det avläser fortfarande ingen oberoende eller garanterad ChatGPT-arbetsstatus.
+Detta är ett fristående Manifest V3-tillägg för provning av en kvitterbar färgsignal. Version 0.4.0 kan ta emot flera **modellrapporterade lägen** från samma parning och visa dem som separata kvitterbara jobb. Det avläser fortfarande ingen oberoende eller garanterad ChatGPT-arbetsstatus.
 
 ## Ladda i Chrome
 
@@ -26,19 +26,19 @@ Detta prov kräver en tillfällig HTTPS-tunnel till `signal-probe/server.mjs` oc
 
 De äldre provpluginerna pekar på stängda testtunnlar. Det senaste provet använde **Blinka statusprov 3** och en tillfällig serveradress. Ändra testserverns HTTPS-adress i Blinka-popupen till pluginens aktuella adress innan **Para denna flik**. Adressen byts vid varje omstart av Quick Tunnel.
 
-1. Ladda om Blinka i `chrome://extensions` efter uppdateringen till version 0.3.0.
+1. Ladda om Blinka i `chrome://extensions` efter uppdateringen till version 0.4.0.
 2. Öppna Blinka-popupen på testfliken. Klistra in den aktuella testtunnelns HTTPS-adress (med eller utan `/mcp`) och klicka **Para denna flik**. Godkänn åtkomst till just testtunnelns domän när Chrome frågar.
 3. Popupen visar ett parnings-ID och knappen **Kopiera parnings-ID**. Öppna en ny ChatGPT-chatt i sidopanelen på samma testflik. Välj pluginen som är kopplad till den aktuella tunneln och skicka en enkel testuppgift med ID:t i samma meddelande, exempelvis `Mitt Blinka-parnings-ID är <ID>. Vad är 7 + 5?`
 4. Vänta upp till ungefär en minut; MV3-alarm körs tidigast var 30:e sekund och kan fördröjas. Du behöver inte byta flik.
 5. Kontrollera att endast den parade testflikens grupp får färgsignal. Blinka-popupen ska visa ett väntande **MCP**-jobb med modellens rapporterade läge. Klicka **Kvittera**; gruppens färg ska återställas.
 
-Parningen lagras med `tabId` och ett slumpmässigt lästoken i Blinkas lokala tilläggslagring. ChatGPT får endast parnings-ID:t. Servern lämnar ut händelsen bara till den som har lästokenet. Ett parnings-ID går ut efter 30 minuter. Tunneln är ett tidsbegränsat test och saknar kontoautentisering; använd den inte för verkliga jobb.
+Parningen lagras med `tabId`, lästoken och läsposition i Blinkas lokala tilläggslagring. ChatGPT får endast parnings-ID:t. Servern lämnar ut händelser bara till den som har lästokenet. En parning kan ge flera jobb och går ut efter fyra timmar; **Avsluta parning** stoppar nya signaler utan att kvittera redan väntande jobb. Tunneln är ett tidsbegränsat test och saknar kontoautentisering; använd den inte för verkliga jobb.
+
+**Flera turer i samma chatt:** Ge parnings-ID:t i första meddelandet och välj **Blinka statusprov 3**. Pluginens instruktion ber modellen återanvända ID:t före senare svar i *samma* chatt när kopplingen är tydlig. Detta är ännu inte verifierat i sidopanelen. Använd en ny parning om du byter chatt eller formulärflik; modellen kan glömma ID:t eller missa att anropa verktyget.
 
 **Fortsätt ett redan skapat MCP-jobb efter uppdatering:** Om popupen visar `Jobb … (MCP)` och `Pausad efter färgändring`, klicka **Återuppta signal**. Låt popupen stängas och vänta minst två larmperioder, ungefär en minut. Gruppen ska växla mellan rött och gult så länge jobbet är okvitterat. Klicka därefter **Kvittera** och kontrollera återställd basfärg. Ingen ny parning eller nytt pluginanrop behövs för detta prov.
 
-**Beteendeprov utan uttryckligt verktygsnamn:** Testserverns instruktion och verktygsbeskrivning har ändrats för ett avgränsat prov. De ber modellen att anropa `signalera` en gång före slutsvaret när det aktuella meddelandet innehåller ett Blinka-parnings-ID och en ofarlig testuppgift. Ladda om pluginens verktyg i ChatGPT och starta en ny sidopanelschatt med **Blinka parningsprov** vald. Skapa en ny parning på testfliken, men kopiera endast parnings-ID:t. Skicka till exempel: `Mitt Blinka-parnings-ID är <ID>. Vad är 7 + 5?` Nämn inte verktyget och skriv ingen egen uppmaning att signalera. Om gruppen reagerar och serverloggen visar samma ID, har modellen följt pluginens vägledning i just detta prov. Det innebär inte att den kommer göra det vid varje framtida avslut, väntan eller fel.
-
-Detta prov lyckades i användarens Chrome: meddelandet nämnde inte verktyget, servern loggade exakt samma ID och gruppen blev röd efter Blinkas larm. Använd ett nytt parnings-ID för varje nytt prov. Kvittera ett väntande MCP-jobb i Blinka-popupen när signalen har observerats.
+**Tidigare beteendeprov:** Ett meddelande som bara innehöll ett parnings-ID och frågan `Vad är 7 + 5?` fick modellen att anropa verktyget utan att användaren nämnde det. Servern loggade samma ID och gruppen blev röd. Detta visar modellens följsamhet i ett enskilt prov, inte en garanterad signal vid varje framtida avslut, väntan eller fel. Detaljer finns i [HOOKS_OCH_PLUGIN.md](HOOKS_OCH_PLUGIN.md).
 
 **Sidopanelsprovet, version 0.1.1:** Öppna `chrome://extensions` och klicka på **Ladda om** för Blinka efter kodändringen. Ladda sedan om en vanlig `chatgpt.com`-flik. Öppna Blinka-popupen: raden `Vanlig ChatGPT-flik` ska nu få en träff. Stäng därefter ChatGPTs sidopanel helt och öppna den igen på en testflik. Öppna Blinka-popupen på nytt och kontrollera `ChatGPT-sidopanelens iframe` samt `Annan inbäddad ChatGPT-ram`. Du behöver inte skriva något till ChatGPT för detta prov; skriptet rapporterar när det laddas. Det läser endast om URL-parametern `surface` har värdet `browser_side_chat`, om ramen är toppnivå, och avsändarens tabId/frameId. Det läser inte sidans innehåll, hela URL:en, cookies eller konversationer.
 
@@ -51,6 +51,6 @@ Om en vanlig ChatGPT-flik ger träff men båda ramraderna saknar träff, fungera
 - Alarmens minsta normala period är 30 sekunder och de kan fördröjas. Signalen är därför långsam färgväxling, inte ett sekundsnabbt blinkande.
 - Vid en yttre färgändring pausar Blinka för att undvika att två tillägg skriver över varandra. Basfärgen blir då den nya färgen. Den ursprungliga färgen före den yttre ändringen återställs inte.
 - Vid flytt mellan fönster kan Chrome ge gruppen nytt ID; Blinka följer flikens nya grupp vid avstämning. Detta behöver manuell verifiering.
-- Användaren har verifierat färgväxling och återställning för ett MCP-jobb samt sidopanelsignaler för `vantar_pa_svar` och `klar`. Visning av läget i popupen tillkom i 0.3.0 och behöver kontrolleras efter omladdning.
+- Användaren har verifierat färgväxling och återställning för ett MCP-jobb samt sidopanelsignaler för `vantar_pa_svar` och `klar`. Serverns kö för flera händelser är automatiskt provad. Flera signaler från samma parning i sidopanelen återstår att kontrollera; det är ett funktionsprov, ingen ny transportundersökning.
 
 Se [UNDERSOKNING.md](UNDERSOKNING.md) för källbelägg och nästa steg.

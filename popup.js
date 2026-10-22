@@ -19,13 +19,15 @@ async function refresh() {
   $("pairs").replaceChildren();
   const pairs=Object.values(state.pairs||{}).filter(p=>p.tabId===tab?.id);
   for (const pair of pairs) {
-    const li=document.createElement("li"), id=document.createElement("span"), button=document.createElement("button");
+    const li=document.createElement("li"), id=document.createElement("span"), button=document.createElement("button"), stop=document.createElement("button");
     id.className="code"; id.textContent=pair.pairId;
     button.textContent="Kopiera parnings-ID";
     button.onclick=()=>run(async()=>{await navigator.clipboard.writeText(pair.pairId);});
-    li.append("Parnings-ID: ",id,document.createElement("br"),button); $("pairs").append(li);
+    stop.textContent="Avsluta parning";
+    stop.onclick=()=>run(()=>send({type:"unpair",pairId:pair.pairId}));
+    li.append("Parnings-ID: ",id,document.createElement("br"),button,stop); $("pairs").append(li);
   }
-  if (!pairs.length) $("pairs").textContent="Ingen väntande parning på denna flik.";
+  if (!pairs.length) $("pairs").textContent="Ingen aktiv parning på denna flik.";
   const last=state.lastRemoteSignal;
   $("lastSignal").textContent=last ? `Senaste MCP-signal: ${STATUS_LABELS[last.lage] ? `${STATUS_LABELS[last.lage]}, ` : ""}flik ${last.tabId}, ${new Date(last.at).toLocaleTimeString()}.` : "Ingen MCP-signal mottagen av Blinka ännu.";
   const jobs = Object.values(state.jobs).filter(j=>j.tabId===tab?.id);

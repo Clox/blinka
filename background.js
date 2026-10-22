@@ -72,7 +72,7 @@ async function add(tabId) {
 function endpoint(origin,path) { return `${origin}${path}`; }
 async function postJson(url,body) {
   const response=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body),signal:AbortSignal.timeout(10000)});
-  if (!response.ok) throw new Error(`Servern svarade ${response.status}.`);
+  if (!response.ok) { const error=new Error(`Servern svarade ${response.status}.`); error.status=response.status; throw error; }
   return response.json();
 }
 async function pair(tabId,origin) {
@@ -83,23 +83,33 @@ async function pair(tabId,origin) {
   const s=await read(); s.pairs ||= {};
   const pairId=crypto.randomUUID(), readToken=crypto.randomUUID();
   await postJson(endpoint(url.origin,"/pair"),{pair_id:pairId,read_token:readToken});
-  s.pairs[pairId]={pairId,readToken,tabId,windowId:tab.windowId,origin:url.origin,createdAt:Date.now()};
+  s.pairs[pairId]={pairId,readToken,tabId,windowId:tab.windowId,origin:url.origin,createdAt:Date.now(),cursor:0};
   await save(s); await setupAlarm(s); return pairId;
 }
 async function pollPairs(s) {
   for (const [pairId,pair] of Object.entries(s.pairs || {})) {
-    if (Date.now()-pair.createdAt>30*60*1000 || !(await getTab(pair.tabId))) { delete s.pairs[pairId]; continue; }
+    if (Date.now()-pair.createdAt>4*60*60*1000 || !(await getTab(pair.tabId))) { delete s.pairs[pairId]; continue; }
     try {
-      const result=await postJson(endpoint(pair.origin,"/events"),{pair_id:pairId,read_token:pair.readToken});
-      if (result.status!=="attention") continue;
-      const lage=REMOTE_STATUSES.has(result.lage) ? result.lage : null;
-      const jobId=await createJobInState(s,pair.tabId,"plugin",pairId,lage);
-      s.lastRemoteSignal={pairId,tabId:pair.tabId,jobId,lage,at:Date.now()};
-      delete s.pairs[pairId];
+      const result=await postJson(endpoint(pair.origin,"/events"),{pair_id:pairId,read_token:pair.readToken,after:pair.cursor||0});
+      if (!Array.isArray(result.events)) throw new Error("Ogiltigt svar från testservern.");
+      for (const event of result.events) {
+        if (!Number.isSafeInteger(event.id) || event.id <= (pair.cursor||0) || !REMOTE_STATUSES.has(event.lage)) throw new Error("Ogiltig händelse från testservern.");
+        const jobId=await createJobInState(s,pair.tabId,"plugin",pairId,event.lage);
+        pair.cursor=event.id;
+        s.lastRemoteSignal={pairId,tabId:pair.tabId,jobId,lage:event.lage,at:Date.now()};
+      }
     } catch (error) {
       s.lastRemoteError=String(error?.message||error);
+      if (error?.status===404) delete s.pairs[pairId];
     }
   }
+}
+async function unpair(pairId) {
+  const s=await read(), pair=s.pairs?.[pairId];
+  if (!pair) throw new Error("Parningen finns inte längre.");
+  delete s.pairs[pairId];
+  await save(s); await setupAlarm(s);
+  try { await postJson(endpoint(pair.origin,"/unpair"),{pair_id:pairId,read_token:pair.readToken}); } catch {}
 }
 async function ack(id) {
   const s=await read(); if (!s.jobs[id]) throw new Error("Jobbet finns inte längre.");
@@ -129,6 +139,7 @@ chrome.runtime.onMessage.addListener((message,sender,respond)=>{
     if (message?.type==="state") { const s=await read(); await reconcile(s); await save(s); return {ok:true,state:s}; }
     if (message?.type==="add") return {ok:true,id:await add(message.tabId)};
     if (message?.type==="pair") return {ok:true,pairId:await pair(message.tabId,message.origin)};
+    if (message?.type==="unpair") { await unpair(message.pairId); return {ok:true}; }
     if (message?.type==="ack") { await ack(message.id); return {ok:true}; }
     if (message?.type==="resume") { await resume(message.groupId); return {ok:true}; }
     if (message?.type==="attention") { await chrome.windows.update(message.windowId,{drawAttention:true}); return {ok:true}; }
