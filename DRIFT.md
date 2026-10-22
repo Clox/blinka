@@ -31,9 +31,16 @@ Cloudflare Quick Tunnel har slumpmässig adress vid omstart. En namngiven
 Cloudflare Tunnel skulle kräva en Cloudflare-ansluten domän som användaren
 inte har uppgett sig ha.
 
-Nästa användarsteg är att skapa/logga in på ett Tailscale-konto och aktivera
-klienten på denna dator. Därefter kan vi starta servern med
-`BLINKA_STATE_FILE`, slå på Funnel för port 8787, verifiera MCP från
+Tailscale-klienten är nu ansluten på datorn. Den lokala servern körs som
+`systemctl --user`-tjänsten `blinka-signal.service` med state-fil i
+`/home/oscar/.local/state/blinka/pairs.json` och startar om vid fel.
+Enhetsfilen finns i `signal-probe/blinka-signal.service` och en kopia är
+installerad i `~/.config/systemd/user/`. Den tidigare tillfälliga servern och
+Cloudflare-tunneln har stoppats. Tailscale Funnel är ännu inte aktiverat;
+Tailscale begär godkännande för att göra port 8787 offentligt nåbar, aktivera
+HTTPS-certifikat och ändra tailnet-policyn.
+
+Efter godkännande: slå på Funnel för port 8787, verifiera MCP från
 sidopanelen på den fasta adressen och registrera pluginen en sista gång.
 Blinka 0.4.1 på disk accepterar redan den nya adressen; användaren har 0.4.0
 installerad och behöver ladda om tillägget när adressen är klar.
