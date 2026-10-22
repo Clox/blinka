@@ -77,3 +77,9 @@ ChatGPT vilka två färger användaren menade. Servern loggade `signalera` med
 `lage: vantar_pa_svar` kl. `2026-10-22T20:01:37.847Z`. Användaren såg
 den parade gruppen växla färg. Detta är ett positivt enskilt prov av
 modellrapporterat vänteläge, inte en garanterad livscykelhändelse.
+
+För ett separat avslutsprov startades servern och tunneln om. Den aktuella
+tillfälliga adressen är `https://arranged-drove-pressing-thu.trycloudflare.com`
+och den anslutna privata pluginen heter **Blinka statusprov 3**
+(`plugin_asdk_app_6ada79f9229c8191a1b63d48841b7ac4`). Både tjänster och
+parningar löper ut; kontrollera adressen före ett nytt prov.
