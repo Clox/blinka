@@ -43,6 +43,6 @@ Om en vanlig ChatGPT-flik ger träff men båda ramraderna saknar träff, fungera
 - Alarmens minsta normala period är 30 sekunder och de kan fördröjas. Signalen är därför långsam färgväxling, inte ett sekundsnabbt blinkande.
 - Vid en yttre färgändring pausar Blinka för att undvika att två tillägg skriver över varandra. Basfärgen blir då den nya färgen. Den ursprungliga färgen före den yttre ändringen återställs inte.
 - Vid flytt mellan fönster kan Chrome ge gruppen nytt ID; Blinka följer flikens nya grupp vid avstämning. Detta behöver manuell verifiering.
-- Omladdning och färgobservation i användarens Chrome måste göras manuellt. Ett direkt MCP-anrop har verifierat att serverhändelsen ger ett jobb på den parade fliken; färgväxling efter korrigeringen i 0.2.1 återstår att observera.
+- Användaren har verifierat färgväxling och återställning för ett MCP-jobb i Chrome 0.2.1. Händelsen kom från ett lokalt testanrop; den nya parningspluginens anrop från sidopanelen återstår att prova.
 
 Se [UNDERSOKNING.md](UNDERSOKNING.md) för källbelägg och nästa steg.

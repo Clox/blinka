@@ -41,5 +41,6 @@ vid avslut, väntan eller fel. I det nya parningsprovet verifierades vägen frå
 ett **direkt lokalt** MCP-anrop via servern till ett väntande jobb på rätt
 parad Chrome-flik. Den privata parningspluginen syntes ännu inte i användarens
 `@`-val i sidopanelen, så den sammanhängande vägen från just den pluginen i
-sidopanelen är inte verifierad. Gruppens färgväxling behöver provas efter
-Blinkas korrigering i version 0.2.1.
+sidopanelen är inte verifierad. Efter Blinkas korrigering i version 0.2.1
+bekräftade användaren att det väntande MCP-jobbet växlade gruppfärg och att
+färgen återställdes när jobbet kvitterades.
