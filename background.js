@@ -1,7 +1,6 @@
 const KEY = "blinkaManualV1";
 const ALARM = "blinkaColorTick";
 const COLORS = ["red", "yellow"];
-const REMOTE_STATUSES = new Set(["klar", "vantar_pa_svar", "vantar_pa_godkannande", "avbruten", "fel"]);
 let queue = Promise.resolve();
 function serial(fn) { const next=queue.then(fn); queue=next.catch(console.error); return next; }
 function chatgptFaviconBadge(url) {
@@ -22,12 +21,25 @@ async function recordFaviconProbe(tabId,url) {
   s.probes.faviconTabs[tabId]={current:badge,at:Date.now(),lastBadge:badge || prior?.lastBadge || null,lastBadgeAt:badge ? Date.now() : prior?.lastBadgeAt || null};
   await save(s);
 }
-async function read() { return (await chrome.storage.local.get(KEY))[KEY] || {jobs:{},groups:{},owned:{},phase:0,probes:{}}; }
+async function read() {
+  const s=(await chrome.storage.local.get(KEY))[KEY] || {jobs:{},groups:{},owned:{},phase:0,probes:{}};
+  s.jobs ||= {}; s.groups ||= {}; s.owned ||= {}; s.probes ||= {};
+  const legacy=Boolean(s.pairs || s.lastRemoteSignal || s.lastRemoteError ||
+    ["regular","regularTabs","panel","otherFrame"].some(key=>key in s.probes) ||
+    Object.values(s.jobs).some(job=>job.source==="plugin"));
+  if (legacy) {
+    delete s.pairs; delete s.lastRemoteSignal; delete s.lastRemoteError;
+    for (const [id,job] of Object.entries(s.jobs)) if (job.source==="plugin") delete s.jobs[id];
+    for (const key of ["regular","regularTabs","panel","otherFrame"]) delete s.probes[key];
+    await reconcile(s); await save(s); await setupAlarm(s);
+  }
+  return s;
+}
 async function save(s) { await chrome.storage.local.set({[KEY]:s}); }
 async function getGroup(id) { try { return await chrome.tabGroups.get(Number(id)); } catch { return null; } }
 async function getTab(id) { try { return await chrome.tabs.get(Number(id)); } catch { return null; } }
 async function setupAlarm(s) {
-  if (Object.keys(s.pairs || {}).length || Object.keys(s.jobs).some(id=>s.jobs[id].groupId >= 0)) await chrome.alarms.create(ALARM,{periodInMinutes:0.5});
+  if (Object.keys(s.jobs).some(id=>s.jobs[id].groupId >= 0)) await chrome.alarms.create(ALARM,{periodInMinutes:0.5});
   else await chrome.alarms.clear(ALARM);
 }
 async function restore(groupId, record) {
@@ -64,7 +76,7 @@ async function paint(s) {
   }
   s.phase++;
 }
-async function createJobInState(s,tabId,source="manual",pairId=null,lage=null) {
+async function createJobInState(s,tabId) {
   const tab=await getTab(tabId); if (!tab) throw new Error("Fliken finns inte längre.");
   let groupId=tab.groupId;
   if (groupId<0) {
@@ -79,55 +91,13 @@ async function createJobInState(s,tabId,source="manual",pairId=null,lage=null) {
   const group=await getGroup(groupId);
   if (!s.groups[groupId]) s.groups[groupId]={baseColor:group.color,expected:group.color,paused:false};
   else if (s.groups[groupId].paused) { s.groups[groupId].baseColor=group.color; s.groups[groupId].expected=group.color; s.groups[groupId].paused=false; }
-  const id=crypto.randomUUID(); s.jobs[id]={id,tabId,groupId,source,pairId,lage};
+  const id=crypto.randomUUID(); s.jobs[id]={id,tabId,groupId};
   return id;
 }
 async function add(tabId) {
   const s=await read(); await reconcile(s);
   const id=await createJobInState(s,tabId);
   await paint(s); await save(s); await setupAlarm(s); return id;
-}
-function endpoint(origin,path) { return `${origin}${path}`; }
-async function postJson(url,body) {
-  const response=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body),signal:AbortSignal.timeout(10000)});
-  if (!response.ok) { const error=new Error(`Servern svarade ${response.status}.`); error.status=response.status; throw error; }
-  return response.json();
-}
-async function pair(tabId,origin) {
-  const url=new URL(origin);
-  if (url.protocol!=="https:" || !url.hostname || url.username || url.password || url.pathname!=="/" || url.search || url.hash) throw new Error("Ange en HTTPS-adress utan sökväg eller inloggningsuppgifter.");
-  if (!(await chrome.permissions.contains({origins:[`${url.origin}/*`]}))) throw new Error("Blinka saknar åtkomst till signalservern.");
-  const tab=await getTab(tabId); if (!tab) throw new Error("Fliken finns inte längre.");
-  const s=await read(); s.pairs ||= {};
-  const pairId=crypto.randomUUID(), readToken=crypto.randomUUID();
-  await postJson(endpoint(url.origin,"/pair"),{pair_id:pairId,read_token:readToken});
-  s.pairs[pairId]={pairId,readToken,tabId,windowId:tab.windowId,origin:url.origin,createdAt:Date.now(),cursor:0};
-  await save(s); await setupAlarm(s); return pairId;
-}
-async function pollPairs(s) {
-  for (const [pairId,pair] of Object.entries(s.pairs || {})) {
-    if (Date.now()-pair.createdAt>4*60*60*1000 || !(await getTab(pair.tabId))) { delete s.pairs[pairId]; continue; }
-    try {
-      const result=await postJson(endpoint(pair.origin,"/events"),{pair_id:pairId,read_token:pair.readToken,after:pair.cursor||0});
-      if (!Array.isArray(result.events)) throw new Error("Ogiltigt svar från signalservern.");
-      for (const event of result.events) {
-        if (!Number.isSafeInteger(event.id) || event.id <= (pair.cursor||0) || !REMOTE_STATUSES.has(event.lage)) throw new Error("Ogiltig händelse från signalservern.");
-        const jobId=await createJobInState(s,pair.tabId,"plugin",pairId,event.lage);
-        pair.cursor=event.id;
-        s.lastRemoteSignal={pairId,tabId:pair.tabId,jobId,lage:event.lage,at:Date.now()};
-      }
-    } catch (error) {
-      s.lastRemoteError=String(error?.message||error);
-      if (error?.status===404) delete s.pairs[pairId];
-    }
-  }
-}
-async function unpair(pairId) {
-  const s=await read(), pair=s.pairs?.[pairId];
-  if (!pair) throw new Error("Parningen finns inte längre.");
-  delete s.pairs[pairId];
-  await save(s); await setupAlarm(s);
-  try { await postJson(endpoint(pair.origin,"/unpair"),{pair_id:pairId,read_token:pair.readToken}); } catch {}
 }
 async function ack(id) {
   const s=await read(); if (!s.jobs[id]) throw new Error("Jobbet finns inte längre.");
@@ -140,24 +110,10 @@ async function resume(groupId) {
   record.baseColor=group.color; record.expected=group.color; record.paused=false;
   await paint(s); await save(s); await setupAlarm(s);
 }
-chrome.runtime.onMessage.addListener((message,sender,respond)=>{
+chrome.runtime.onMessage.addListener((message,_sender,respond)=>{
   serial(async()=>{
-    if (message?.type==="probe") {
-      const s=await read(); s.probes ||= {};
-      const kind=message.topFrame===false ? (message.surface==="browser_side_chat" ? "panel" : "otherFrame") : "regular";
-      const previous=s.probes[kind];
-      s.probes[kind]={count:(previous?.count||0)+1,tabId:sender.tab?.id ?? null,frameId:sender.frameId ?? null,at:Date.now()};
-      if (kind==="regular" && sender.tab?.id != null) {
-        s.probes.regularTabs ||= {};
-        s.probes.regularTabs[sender.tab.id]={at:Date.now(),frameId:sender.frameId ?? null};
-      }
-      await save(s);
-      return {ok:true};
-    }
     if (message?.type==="state") { const s=await read(); await reconcile(s); await save(s); return {ok:true,state:s}; }
     if (message?.type==="add") return {ok:true,id:await add(message.tabId)};
-    if (message?.type==="pair") return {ok:true,pairId:await pair(message.tabId,message.origin)};
-    if (message?.type==="unpair") { await unpair(message.pairId); return {ok:true}; }
     if (message?.type==="ack") { await ack(message.id); return {ok:true}; }
     if (message?.type==="resume") { await resume(message.groupId); return {ok:true}; }
     if (message?.type==="attention") { await chrome.windows.update(message.windowId,{drawAttention:true}); return {ok:true}; }
@@ -165,7 +121,7 @@ chrome.runtime.onMessage.addListener((message,sender,respond)=>{
   }).then(respond,e=>respond({ok:false,error:String(e?.message||e)}));
   return true;
 });
-chrome.alarms.onAlarm.addListener(alarm=>{if(alarm.name===ALARM) serial(async()=>{const s=await read(); await reconcile(s); await pollPairs(s); await paint(s); await save(s); await setupAlarm(s);});});
+chrome.alarms.onAlarm.addListener(alarm=>{if(alarm.name===ALARM) serial(async()=>{const s=await read(); await reconcile(s); await paint(s); await save(s); await setupAlarm(s);});});
 chrome.tabs.onUpdated.addListener((tabId,change)=>{
   if (change.favIconUrl!==undefined) serial(()=>recordFaviconProbe(tabId,change.favIconUrl));
   if (change.groupId!==undefined) serial(async()=>{const s=await read(); await reconcile(s); await save(s); await setupAlarm(s);});
