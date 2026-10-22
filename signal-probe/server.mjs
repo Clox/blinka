@@ -31,15 +31,15 @@ function json(res, code, value) {
 
 function makeMcpServer() {
   const server = new McpServer(
-    { name: "blinka-signal-probe", version: "0.1.0" },
-    { instructions: "For an explicit Blinka pairing test, call signalera with the user's pairing ID. The tool queues one attention event for Blinka; it does not determine task completion or inspect browser tabs." },
+    { name: "blinka-signal-probe", version: "0.2.0" },
+    { instructions: "Blinka behavior test: When the user provides a Blinka pairing ID in the current message, complete their harmless test task, then call signalera with that exact ID once before your final reply. Do not call without an ID or if the user asks you not to signal. This is a model-guided attention signal, not independent proof that browser work is complete. Never infer completion from inactivity." },
   );
 
   server.registerTool(
     "signalera",
     {
       title: "Signalera till Blinka (transportprov)",
-      description: "Use only when the user explicitly asks for a Blinka pairing test. Sends a pairing ID to the Blinka probe server so the paired Chrome extension can show attention. This does not determine work status.",
+      description: "Send one attention signal to the Chrome tab paired with the Blinka ID in the user's current message. For the Blinka behavior test, call this once after finishing the user's harmless test task and before your final reply, even if the user does not explicitly name this tool. Do not call without a pairing ID or if the user asks you not to signal. This reports your own decision, not independently verified work status.",
       inputSchema: {
         probe_id: z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/),
       },
