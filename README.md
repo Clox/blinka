@@ -20,6 +20,12 @@ Detta är ett fristående Manifest V3-tillägg för provning av en kvitterbar f�
 
 ## Prova parning mellan sidopanel och rätt flik
 
+**Aktuellt driftläge:** Den tidigare Cloudflare-tunneln är stoppad. En fast
+Tailscale-adress fungerar tekniskt på port 8443, men ChatGPT kunde inte nå
+MCP-servern där vid registrering. Det finns därför just nu ingen fungerande
+ChatGPT-plugin för en ny parning. Se [DRIFT.md](DRIFT.md) innan fler manuella
+sidopanelsprov.
+
 Detta prov kräver en tillfällig HTTPS-tunnel till `signal-probe/server.mjs` och en privat ChatGPT-plugin kopplad till samma tunnel. Testservern tar bara emot slumpmässiga ID:n och ett modellrapporterat läge. Använd en ofarlig testflik utan privata formulärdata.
 
 **Resultat hittills:** Den riktiga Chrome-sidopanelen anropade verktyget med rätt parnings-ID och den parade gruppen bytte färg. I två senare prov, utan uttrycklig uppmaning att anropa verktyget, loggade servern `vantar_pa_svar` när modellen bad om mer information och `klar` när den löst en enkel uppgift. Gruppen växlade färg i båda fallen. Detta visar att modellstyrd signalering kan fungera för båda lägena, men inte att den sker vid varje avslut eller vänteläge.

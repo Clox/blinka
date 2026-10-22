@@ -36,18 +36,23 @@ Tailscale-klienten är nu ansluten på datorn. Den lokala servern körs som
 `/home/oscar/.local/state/blinka/pairs.json` och startar om vid fel.
 Enhetsfilen finns i `signal-probe/blinka-signal.service` och en kopia är
 installerad i `~/.config/systemd/user/`. Den tidigare tillfälliga servern och
-Cloudflare-tunneln har stoppats. Tailscale-kontot har godkänt Funnel, men
-lokal aktivering kräver administratörsrättighet. Kommandot är
-`sudo tailscale funnel --bg 8787`; det väntar på användarens lösenord i en
-öppnad terminal. Datorns Tailscale-namn är `lenovard.tailc13527.ts.net`, så
-den förväntade MCP-adressen är
-`https://lenovard.tailc13527.ts.net/mcp`. Kontrollera med
-`tailscale funnel status` efter att kommandot lyckats.
+Cloudflare-tunneln har stoppats. Tailscale-kontot har godkänt Funnel.
 
-Efter godkännande: slå på Funnel för port 8787, verifiera MCP från
-sidopanelen på den fasta adressen och registrera pluginen en sista gång.
-Blinka 0.4.1 på disk accepterar redan den nya adressen; användaren har 0.4.0
-installerad och behöver ladda om tillägget när adressen är klar.
+**Blockerande resultat 22 oktober 2026:** `laradock_nginx_1` från projektet
+Spadrig använder redan värddatorns port 443 på alla adresser. Funnel på 443
+kunde därför inte svara där. Funnel fungerar på 8443:
+`https://lenovard.tailc13527.ts.net:8443/mcp`. Ett HTTPS-anrop med MCP:s
+`initialize` gav HTTP 200 och serverns instruktioner. När samma URL angavs i
+ChatGPTs dialog för anpassad MCP-server blev svaret däremot *Det gick inte att
+nå MCP-servern*. Ingen ny plugin skapades. Att lokal `curl` fungerar bevisar
+alltså inte att ChatGPTs serversida når Funnel på 8443. Båda Funnel-portarna
+är avstängda efter provet. Ändra inte Laradocks portkoppling utan
+att bedöma följderna för Spadrig.
+
+Blinka 0.4.1 på disk accepterar en ny HTTPS-adress; användaren har 0.4.0
+installerad och behöver ladda om tillägget när en fungerande adress finns.
+För fortsatt utveckling är en server med standard-HTTPS på 443, helst en
+senare gemensam server, lämpligare än att kräva en tunnel per användare.
 
 När en fast HTTPS-adress finns återstår att ansluta MCP-pluginen till
 `https://<värdnamn>/mcp`, ange samma origin i Blinka och hålla servern igång.
