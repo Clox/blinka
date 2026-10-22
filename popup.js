@@ -1,4 +1,11 @@
 const $ = id => document.getElementById(id);
+const STATUS_LABELS = {
+  klar: "Klart",
+  vantar_pa_svar: "Väntar på svar",
+  vantar_pa_godkannande: "Väntar på godkännande",
+  avbruten: "Avbrutet",
+  fel: "Fel",
+};
 let activeTab;
 async function send(message) { const response = await chrome.runtime.sendMessage(message); if (!response?.ok) throw new Error(response?.error || "Okänt fel"); return response; }
 async function refresh() {
@@ -14,18 +21,18 @@ async function refresh() {
   for (const pair of pairs) {
     const li=document.createElement("li"), id=document.createElement("span"), button=document.createElement("button");
     id.className="code"; id.textContent=pair.pairId;
-    button.textContent="Kopiera provtext";
-    button.onclick=()=>run(async()=>{await navigator.clipboard.writeText(`Anropa verktyget signalera med probe_id ${pair.pairId}. Detta är bara ett parat transportprov.`);});
+    button.textContent="Kopiera parnings-ID";
+    button.onclick=()=>run(async()=>{await navigator.clipboard.writeText(pair.pairId);});
     li.append("Parnings-ID: ",id,document.createElement("br"),button); $("pairs").append(li);
   }
   if (!pairs.length) $("pairs").textContent="Ingen väntande parning på denna flik.";
   const last=state.lastRemoteSignal;
-  $("lastSignal").textContent=last ? `Senaste MCP-signal: flik ${last.tabId}, ${new Date(last.at).toLocaleTimeString()}.` : "Ingen MCP-signal mottagen av Blinka ännu.";
+  $("lastSignal").textContent=last ? `Senaste MCP-signal: ${STATUS_LABELS[last.lage] ? `${STATUS_LABELS[last.lage]}, ` : ""}flik ${last.tabId}, ${new Date(last.at).toLocaleTimeString()}.` : "Ingen MCP-signal mottagen av Blinka ännu.";
   const jobs = Object.values(state.jobs).filter(j=>j.tabId===tab?.id);
   $("jobs").replaceChildren();
   for (const job of jobs) {
     const li=document.createElement("li"), button=document.createElement("button");
-    li.append(`Jobb ${job.id.slice(0,8)}${job.source==="plugin" ? " (MCP)" : ""} `); button.textContent="Kvittera";
+    li.append(`Jobb ${job.id.slice(0,8)}${job.source==="plugin" ? ` (MCP${STATUS_LABELS[job.lage] ? `: ${STATUS_LABELS[job.lage]}` : ""})` : ""} `); button.textContent="Kvittera";
     button.onclick=()=>run(async()=>{await send({type:"ack",id:job.id});}); li.append(button); $("jobs").append(li);
   }
   if (!jobs.length) $("jobs").textContent="Inga väntande jobb på denna flik.";

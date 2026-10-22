@@ -1,6 +1,6 @@
 # Blinka – första tekniska provet
 
-Detta är ett fristående Manifest V3-tillägg för provning av en kvitterbar färgsignal. Version 0.2.1 kan dessutom ta emot en **uttrycklig testhändelse** via ett parat MCP-verktyg. Det avläser fortfarande ingen automatisk ChatGPT-arbetsstatus.
+Detta är ett fristående Manifest V3-tillägg för provning av en kvitterbar färgsignal. Version 0.3.0 kan ta emot ett **modellrapporterat läge** via ett parat MCP-verktyg och visa det vid det väntande jobbet. Det avläser fortfarande ingen oberoende eller garanterad ChatGPT-arbetsstatus.
 
 ## Ladda i Chrome
 
@@ -20,17 +20,17 @@ Detta är ett fristående Manifest V3-tillägg för provning av en kvitterbar f�
 
 ## Prova parning mellan sidopanel och rätt flik
 
-Detta prov kräver en tillfällig HTTPS-tunnel till `signal-probe/server.mjs` och den privata ChatGPT-pluginen **Blinka parningsprov**. Testservern tar bara emot slumpmässiga ID:n. Använd en ofarlig testflik utan privata formulärdata.
+Detta prov kräver en tillfällig HTTPS-tunnel till `signal-probe/server.mjs` och en privat ChatGPT-plugin kopplad till samma tunnel. Testservern tar bara emot slumpmässiga ID:n och ett modellrapporterat läge. Använd en ofarlig testflik utan privata formulärdata.
 
-**Resultat hittills:** Ett uttryckligt `signalera`-anrop från den riktiga Chrome-sidopanelen nådde servern med samma parnings-ID som i meddelandet. Användaren såg därefter den parade gruppen bli röd. I ett senare prov frågade modellen vilka två färger användaren menade, servern loggade `lage: vantar_pa_svar` för den parade fliken och användaren såg gruppen växla färg. Detta verifierar en modellstyrd signal för ett vänteläge, men ingen garanterad automatisk detektion av ChatGPTs arbetsstatus.
+**Resultat hittills:** Den riktiga Chrome-sidopanelen anropade verktyget med rätt parnings-ID och den parade gruppen bytte färg. I två senare prov, utan uttrycklig uppmaning att anropa verktyget, loggade servern `vantar_pa_svar` när modellen bad om mer information och `klar` när den löst en enkel uppgift. Gruppen växlade färg i båda fallen. Detta visar att modellstyrd signalering kan fungera för båda lägena, men inte att den sker vid varje avslut eller vänteläge.
 
-De äldre pluginerna **Blinka parningsprov** och **Blinka statusprov** pekar på stängda testtunnlar. Det senaste provet använde **Blinka statusprov 2** och en tillfällig serveradress. Ändra testserverns HTTPS-adress i Blinka-popupen till pluginens aktuella adress innan **Para denna flik**. Adressen är avsiktligt inte sparad i projektet eftersom Quick Tunnel byter den vid omstart.
+De äldre provpluginerna pekar på stängda testtunnlar. Det senaste provet använde **Blinka statusprov 3** och en tillfällig serveradress. Ändra testserverns HTTPS-adress i Blinka-popupen till pluginens aktuella adress innan **Para denna flik**. Adressen byts vid varje omstart av Quick Tunnel.
 
-1. Ladda om Blinka i `chrome://extensions` efter uppdateringen till version 0.2.1.
+1. Ladda om Blinka i `chrome://extensions` efter uppdateringen till version 0.3.0.
 2. Öppna Blinka-popupen på testfliken. Klistra in den aktuella testtunnelns HTTPS-adress (med eller utan `/mcp`) och klicka **Para denna flik**. Godkänn åtkomst till just testtunnelns domän när Chrome frågar.
-3. Popupen visar ett parnings-ID och knappen **Kopiera provtext**. Öppna en ny ChatGPT-chatt i sidopanelen på samma testflik. Välj `@Blinka parningsprov` och klistra in provtexten efter mentionen.
-4. Skicka meddelandet och byt omedelbart till en **annan** vanlig Chrome-flik. Vänta upp till ungefär en minut; MV3-alarm körs tidigast var 30:e sekund och kan fördröjas.
-5. Kontrollera att endast den parade testflikens grupp får färgsignal. Återvänd till testfliken och öppna Blinka-popupen: den ska visa ett väntande jobb märkt **MCP** och senaste MCP-signal med testflikens ID. Klicka **Kvittera**; gruppens färg ska återställas.
+3. Popupen visar ett parnings-ID och knappen **Kopiera parnings-ID**. Öppna en ny ChatGPT-chatt i sidopanelen på samma testflik. Välj pluginen som är kopplad till den aktuella tunneln och skicka en enkel testuppgift med ID:t i samma meddelande, exempelvis `Mitt Blinka-parnings-ID är <ID>. Vad är 7 + 5?`
+4. Vänta upp till ungefär en minut; MV3-alarm körs tidigast var 30:e sekund och kan fördröjas. Du behöver inte byta flik.
+5. Kontrollera att endast den parade testflikens grupp får färgsignal. Blinka-popupen ska visa ett väntande **MCP**-jobb med modellens rapporterade läge. Klicka **Kvittera**; gruppens färg ska återställas.
 
 Parningen lagras med `tabId` och ett slumpmässigt lästoken i Blinkas lokala tilläggslagring. ChatGPT får endast parnings-ID:t. Servern lämnar ut händelsen bara till den som har lästokenet. Ett parnings-ID går ut efter 30 minuter. Tunneln är ett tidsbegränsat test och saknar kontoautentisering; använd den inte för verkliga jobb.
 
@@ -51,6 +51,6 @@ Om en vanlig ChatGPT-flik ger träff men båda ramraderna saknar träff, fungera
 - Alarmens minsta normala period är 30 sekunder och de kan fördröjas. Signalen är därför långsam färgväxling, inte ett sekundsnabbt blinkande.
 - Vid en yttre färgändring pausar Blinka för att undvika att två tillägg skriver över varandra. Basfärgen blir då den nya färgen. Den ursprungliga färgen före den yttre ändringen återställs inte.
 - Vid flytt mellan fönster kan Chrome ge gruppen nytt ID; Blinka följer flikens nya grupp vid avstämning. Detta behöver manuell verifiering.
-- Användaren har verifierat färgväxling och återställning för ett MCP-jobb i Chrome 0.2.1. Händelsen kom från ett lokalt testanrop; den nya parningspluginens anrop från sidopanelen återstår att prova.
+- Användaren har verifierat färgväxling och återställning för ett MCP-jobb samt sidopanelsignaler för `vantar_pa_svar` och `klar`. Visning av läget i popupen tillkom i 0.3.0 och behöver kontrolleras efter omladdning.
 
 Se [UNDERSOKNING.md](UNDERSOKNING.md) för källbelägg och nästa steg.

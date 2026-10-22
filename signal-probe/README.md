@@ -83,3 +83,8 @@ tillfälliga adressen är `https://arranged-drove-pressing-thu.trycloudflare.com
 och den anslutna privata pluginen heter **Blinka statusprov 3**
 (`plugin_asdk_app_6ada79f9229c8191a1b63d48841b7ac4`). Både tjänster och
 parningar löper ut; kontrollera adressen före ett nytt prov.
+
+Avslutsprovet lyckades: servern loggade `signalera` för
+`4580345c-cd2d-43b2-baad-f948e261f1d6` med `lage: klar` kl.
+`2026-10-22T21:05:57.831Z`, och användaren såg gruppen växla färg.
+Blinka 0.3.0 visar nu det rapporterade läget i popupen för nya MCP-jobb.

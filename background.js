@@ -1,6 +1,7 @@
 const KEY = "blinkaManualV1";
 const ALARM = "blinkaColorTick";
 const COLORS = ["red", "yellow"];
+const REMOTE_STATUSES = new Set(["klar", "vantar_pa_svar", "vantar_pa_godkannande", "avbruten", "fel"]);
 let queue = Promise.resolve();
 function serial(fn) { const next=queue.then(fn); queue=next.catch(console.error); return next; }
 async function read() { return (await chrome.storage.local.get(KEY))[KEY] || {jobs:{},groups:{},owned:{},phase:0,probes:{}}; }
@@ -45,7 +46,7 @@ async function paint(s) {
   }
   s.phase++;
 }
-async function createJobInState(s,tabId,source="manual",pairId=null) {
+async function createJobInState(s,tabId,source="manual",pairId=null,lage=null) {
   const tab=await getTab(tabId); if (!tab) throw new Error("Fliken finns inte längre.");
   let groupId=tab.groupId;
   if (groupId<0) {
@@ -60,7 +61,7 @@ async function createJobInState(s,tabId,source="manual",pairId=null) {
   const group=await getGroup(groupId);
   if (!s.groups[groupId]) s.groups[groupId]={baseColor:group.color,expected:group.color,paused:false};
   else if (s.groups[groupId].paused) { s.groups[groupId].baseColor=group.color; s.groups[groupId].expected=group.color; s.groups[groupId].paused=false; }
-  const id=crypto.randomUUID(); s.jobs[id]={id,tabId,groupId,source,pairId};
+  const id=crypto.randomUUID(); s.jobs[id]={id,tabId,groupId,source,pairId,lage};
   return id;
 }
 async function add(tabId) {
@@ -91,8 +92,9 @@ async function pollPairs(s) {
     try {
       const result=await postJson(endpoint(pair.origin,"/events"),{pair_id:pairId,read_token:pair.readToken});
       if (result.status!=="attention") continue;
-      const jobId=await createJobInState(s,pair.tabId,"plugin",pairId);
-      s.lastRemoteSignal={pairId,tabId:pair.tabId,jobId,at:Date.now()};
+      const lage=REMOTE_STATUSES.has(result.lage) ? result.lage : null;
+      const jobId=await createJobInState(s,pair.tabId,"plugin",pairId,lage);
+      s.lastRemoteSignal={pairId,tabId:pair.tabId,jobId,lage,at:Date.now()};
       delete s.pairs[pairId];
     } catch (error) {
       s.lastRemoteError=String(error?.message||error);
