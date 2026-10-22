@@ -44,3 +44,10 @@ parad Chrome-flik. Den privata parningspluginen syntes ännu inte i användarens
 sidopanelen är inte verifierad. Efter Blinkas korrigering i version 0.2.1
 bekräftade användaren att det väntande MCP-jobbet växlade gruppfärg och att
 färgen återställdes när jobbet kvitterades.
+
+Efter att sidopanelen öppnats på nytt blev **Blinka parningsprov** valbar där.
+Ett uttryckligt anrop med `probe_id`
+`8b3c95a7-9ab0-4f27-99a3-ee20c92e24e0` kvitterades i sidopanelen och
+loggades av servern `2026-10-22T19:27:01.922Z`. Användaren såg den parade
+gruppen bli röd. Detta verifierar den sammanhängande transportvägen, men
+inte att modellen skulle anropa verktyget automatiskt vid ett arbetsläge.

@@ -22,6 +22,8 @@ Detta är ett fristående Manifest V3-tillägg för provning av en kvitterbar f�
 
 Detta prov kräver en tillfällig HTTPS-tunnel till `signal-probe/server.mjs` och den privata ChatGPT-pluginen **Blinka parningsprov**. Testservern tar bara emot slumpmässiga ID:n. Använd en ofarlig testflik utan privata formulärdata.
 
+**Resultat hittills:** Ett uttryckligt `signalera`-anrop från den riktiga Chrome-sidopanelen nådde servern med samma parnings-ID som i meddelandet. Användaren såg därefter den parade gruppen bli röd. Detta visar transport och flikkoppling, men ingen automatisk detektion av ChatGPTs arbetsstatus.
+
 1. Ladda om Blinka i `chrome://extensions` efter uppdateringen till version 0.2.1.
 2. Öppna Blinka-popupen på testfliken. Klistra in den aktuella testtunnelns HTTPS-adress (med eller utan `/mcp`) och klicka **Para denna flik**. Godkänn åtkomst till just testtunnelns domän när Chrome frågar.
 3. Popupen visar ett parnings-ID och knappen **Kopiera provtext**. Öppna en ny ChatGPT-chatt i sidopanelen på samma testflik. Välj `@Blinka parningsprov` och klistra in provtexten efter mentionen.
