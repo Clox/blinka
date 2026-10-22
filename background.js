@@ -3,7 +3,7 @@ const ALARM = "blinkaColorTick";
 const COLORS = ["red", "yellow"];
 let queue = Promise.resolve();
 function serial(fn) { const next=queue.then(fn); queue=next.catch(console.error); return next; }
-async function read() { return (await chrome.storage.local.get(KEY))[KEY] || {jobs:{},groups:{},owned:{},phase:0,probe:null}; }
+async function read() { return (await chrome.storage.local.get(KEY))[KEY] || {jobs:{},groups:{},owned:{},phase:0,probes:{}}; }
 async function save(s) { await chrome.storage.local.set({[KEY]:s}); }
 async function getGroup(id) { try { return await chrome.tabGroups.get(Number(id)); } catch { return null; } }
 async function getTab(id) { try { return await chrome.tabs.get(Number(id)); } catch { return null; } }
@@ -75,6 +75,10 @@ chrome.runtime.onMessage.addListener((message,sender,respond)=>{
       const kind=message.topFrame===false ? (message.surface==="browser_side_chat" ? "panel" : "otherFrame") : "regular";
       const previous=s.probes[kind];
       s.probes[kind]={count:(previous?.count||0)+1,tabId:sender.tab?.id ?? null,frameId:sender.frameId ?? null,at:Date.now()};
+      if (kind==="regular" && sender.tab?.id != null) {
+        s.probes.regularTabs ||= {};
+        s.probes.regularTabs[sender.tab.id]={at:Date.now(),frameId:sender.frameId ?? null};
+      }
       await save(s);
       return {ok:true};
     }
@@ -88,7 +92,7 @@ chrome.runtime.onMessage.addListener((message,sender,respond)=>{
 });
 chrome.alarms.onAlarm.addListener(alarm=>{if(alarm.name===ALARM) serial(async()=>{const s=await read(); await reconcile(s); await paint(s); await save(s); await setupAlarm(s);});});
 chrome.tabs.onUpdated.addListener((tabId,change)=>{if (change.groupId!==undefined) serial(async()=>{const s=await read(); await reconcile(s); await save(s); await setupAlarm(s);});});
-chrome.tabs.onRemoved.addListener(()=>serial(async()=>{const s=await read(); await reconcile(s); await save(s); await setupAlarm(s);}));
+chrome.tabs.onRemoved.addListener(tabId=>serial(async()=>{const s=await read(); if(s.probes?.regularTabs) delete s.probes.regularTabs[tabId]; await reconcile(s); await save(s); await setupAlarm(s);}));
 chrome.tabs.onDetached.addListener(()=>serial(async()=>{const s=await read(); await reconcile(s); await save(s); await setupAlarm(s);}));
 chrome.tabGroups.onUpdated.addListener(group=>serial(async()=>{const s=await read(); const r=s.groups[group.id]; if(r && group.color!==r.expected){r.baseColor=group.color;r.expected=group.color;r.paused=true;await save(s);} }));
 chrome.tabGroups.onRemoved.addListener(()=>serial(async()=>{const s=await read(); await reconcile(s); await save(s); await setupAlarm(s);}));

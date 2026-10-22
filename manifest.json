@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Blinka",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Manuellt prov av kvitterbar flikgruppssignal och sidopanelsåtkomst.",
   "permissions": ["tabs", "tabGroups", "storage", "alarms", "windows"],
   "background": {"service_worker": "background.js"},

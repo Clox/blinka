@@ -22,6 +22,8 @@ Detta är ett fristående Manifest V3-tillägg för **manuell** provning av en k
 
 Om en vanlig ChatGPT-flik ger träff men båda ramraderna saknar träff, fungerar innehållsskriptet i vanliga flikar men dess åtkomst till den faktiska sidopanelen är fortfarande obekräftad och sannolikt blockerad i detta sammanhang. Om inte ens en vanlig flik ger träff behöver installation, omladdning eller Chrome-profil kontrolleras först. En träff i ramen bevisar endast skriptåtkomst, inte att tillförlitlig arbetsstatus finns.
 
+**Tolkning av räknarna i version 0.1.2:** Raden `Alla vanliga ChatGPT-flikar` är sparad historik för hela profilen, så den visar samma värde oavsett vilken flik som är aktiv. `Den här fliken` visar om den aktuella fliken har observerats. ChatGPT-flikar som var öppna innan Blinka laddades behöver laddas om var för sig för att innehållsskriptet ska rapportera en träff. En utebliven träff i en gammal flik säger därför inget om sidopanelens åtkomst.
+
 ## Begränsningar
 
 - Alarmens minsta normala period är 30 sekunder och de kan fördröjas. Signalen är därför långsam färgväxling, inte ett sekundsnabbt blinkande.

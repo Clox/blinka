@@ -18,7 +18,10 @@ async function refresh() {
   $("group").textContent=group ? `Grupp ${tab.groupId}: ${group.paused ? "Pausad efter yttre färgändring" : "Signal aktiv"}. Ursprung: ${group.baseColor}.` : "Ingen aktiv Blinka-signal i denna grupp.";
   const p=state.probes || {};
   const format = item => item ? `träffar ${item.count}, senast ${new Date(item.at).toLocaleTimeString()}, tabId ${item.tabId ?? "saknas"}, frameId ${item.frameId ?? "saknas"}` : "ingen träff";
-  $("probeRegular").textContent=`Vanlig ChatGPT-flik: ${format(p.regular)}`;
+  const current=p.regularTabs?.[tab?.id] || (p.regular?.tabId===tab?.id ? p.regular : null);
+  const chatgptTab=tab?.url?.startsWith("https://chatgpt.com/");
+  $("probeCurrent").textContent=`Den här fliken: ${!chatgptTab ? "inte en vanlig ChatGPT-flik" : current ? `observerad ${new Date(current.at).toLocaleTimeString()}` : "ingen träff; ladda om fliken för kontroll"}`;
+  $("probeRegular").textContent=`Alla vanliga ChatGPT-flikar (sparad historik): ${format(p.regular)}`;
   $("probePanel").textContent=`ChatGPT-sidopanelens iframe: ${format(p.panel)}`;
   $("probeOtherFrame").textContent=`Annan inbäddad ChatGPT-ram: ${format(p.otherFrame)}`;
 }
