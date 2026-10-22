@@ -2,7 +2,7 @@
 
 Detta är ett fristående Manifest V3-tillägg för provning av en kvitterbar färgsignal. Version 0.5.1 förifyller den verifierade gemensamma serveradressen, ger en färdig starttext för ChatGPTs sidopanel och har ett läsprov för ChatGPTs favicon-markör på vanliga webbsidor. Flera **modellrapporterade lägen** från samma parning visas som separata kvitterbara jobb. Blinka avläser fortfarande ingen oberoende eller garanterad ChatGPT-arbetsstatus.
 
-**Nytt verifierat resultat:** När ChatGPT Work faktiskt arbetar på en webbsida har Blinka visat favicon-läget `aktiv` för den fliken. Det kan hjälpa Blinka att identifiera arbetsfliken automatiskt. Läget försvinner också efteråt, men försvinnandet bevisar inte att uppgiften är klar; inga slutmärken (`resultat` eller `överlämning`) är ännu verifierade i sidopanelsprovet.
+**Nytt verifierat resultat:** När ChatGPT Work faktiskt arbetar på en webbsida har Blinka visat favicon-läget `aktiv` för den fliken både när användaren stannade där och efter byte till en annan flik. Det kan hjälpa Blinka att identifiera arbetsfliken automatiskt. I bakgrundsprovet visades efteråt `Nu: ingen. Senast: aktiv`; inget slutmärke (`resultat` eller `överlämning`) observerades. Försvinnandet bevisar inte att uppgiften är klar.
 
 ## Ladda i Chrome
 
