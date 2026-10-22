@@ -1,23 +1,24 @@
 # Blinka
 
-Blinka är ett fristående Chrome-tillägg (Manifest V3) som observerar när ChatGPT Work arbetar på en vanlig webbsida. Version **0.8.0** visar ChatGPTs favicon-markör och har en **manuell förhandsvisning av flikgruppens färgsignal för ett färdigt jobb**. Ingen parning, plugin eller signalserver används.
+Blinka är ett fristående Chrome-tillägg (Manifest V3) som observerar när ChatGPT Work arbetar på en vanlig webbsida. Version **0.9.0** använder övergången från aktivitetsmärke till vanlig favicon som en **kvitterbar signal om att kontrollera ChatGPT**. En knapp kan starta samma färgväxling manuellt. Ingen parning, plugin eller signalserver används.
 
 ## Vad som är verifierat
 
 När ChatGPT Work i sidopanelen faktiskt arbetar på en webbsida har Blinka sett favicon-markören `aktiv` på rätt flik, både när användaren stannade på fliken och när en annan flik valdes. Blinka läser inte sidans DOM, konversationer eller formulär. Chrome skickar favicon-ändringen tillsammans med `tabId` till `chrome.tabs.onUpdated`; Blinka sparar bara märkets typ och tidsstämpel.
 
-Att markören försvinner är **inte** verifierat som `klar`, `väntar på svar`, `avbruten` eller `fel`. Inget slutmärke (`resultat` eller `överlämning`) har observerats i användarens prov. Därför startar favicon-ändringar ännu ingen automatisk färgsignal.
+När markören försvinner efter `aktiv` startar Blinka en färgsignal på rätt flikgrupp. Detta är ännu **inte praktiskt verifierat i Chrome för version 0.9.0**. Övergången är heller inte en säker status för `klar`, `väntar på svar`, `avbruten` eller `fel`: ChatGPTs lokala tilläggskod kan släppa fliken av flera skäl. Inget slutmärke (`resultat` eller `överlämning`) har observerats i användarens prov.
 
 ## Ladda och prova
 
 1. Öppna `chrome://extensions` i Chrome. Ladda `/home/oscar/projects/blinka` som okomprimerat tillägg, eller klicka **Ladda om** om Blinka redan är installerat.
-2. Låt ChatGPT Work arbeta på en testflik. Blinkas popup visar aktuell och senast observerad favicon-markör under **Agentaktivitet**.
-3. Förhandsvisa en framtida uppmärksamhetssignal med **Simulera färdigt jobb på denna flik**. Knappen använder flikens befintliga grupp, eller skapar/återanvänder en Blinka-grupp. Gruppen växlar mellan rött och gult tills **Kvittera simulering** klickas. Färgen återställs därefter. Flera simulerade jobb i samma grupp håller signalen aktiv tills alla kvitteras.
+2. Låt ChatGPT Work arbeta på en testflik. Blinkas popup visar aktuell och senast observerad favicon-markör under **Agentaktivitet**. När `aktiv` återgår till vanlig favicon ska färgväxlingen starta automatiskt på flikens grupp.
+3. Klicka **Kvittera** i Blinkas popup på arbetsfliken efter att du kontrollerat ChatGPT. Färgen återställs när alla signaler i gruppen är kvitterade.
+4. **Simulera färdigt jobb på denna flik** startar samma färgväxling manuellt för ett separat test.
 
-Förhandsvisningen är helt manuell. Den startas **inte** när ChatGPT börjar arbeta och den påstår inte att ChatGPT är färdig. Om användaren eller ett annat tillägg ändrar gruppfärgen pausar Blinka färgväxlingen för att undvika en skrivkonflikt. MV3-alarm ger ungefär 30 sekunder mellan växlingarna, inte en snabb animation.
+Ingen signal startas bara för att ChatGPT börjar arbeta. Varje observerad `aktiv → vanlig favicon` kan skapa en signal, även om föregående signal ännu inte är kvitterad. Knappen skapar ett separat manuellt test. Finns fliken redan i en grupp används den; annars skapas eller återanvänds en Blinka-grupp i samma fönster. Om användaren eller ett annat tillägg ändrar gruppfärgen pausar Blinka färgväxlingen för att undvika en skrivkonflikt. MV3-alarm ger ungefär 30 sekunder mellan växlingarna, inte en snabb animation.
 
 Vid uppdatering från en äldre version återställs gamla testsignaler bara om gruppen fortfarande har den färg Blinka senast satte. En Blinka-grupp kan ligga kvar efter kvittering och avgrupperas i Chrome. Tidigare server- och pluginexperiment finns kvar i Git-historiken men används inte längre.
 
 ## Nästa steg
 
-Använd den verifierade `aktiv`-händelsen för att hitta arbetsfliken automatiskt. Undersök separat en tillförlitlig händelse som säger att ChatGPT faktiskt behöver användarens uppmärksamhet. En försvunnen `aktiv`-markör räcker inte. Se [UNDERSOKNING.md](UNDERSOKNING.md).
+Prova övergången med ett verkligt sidopanelsjobb, både när du är kvar på fliken och när du arbetar i en annan flik. Kontrollera om signalen någon gång kommer för tidigt eller uteblir. En mer specifik statuskälla behövs fortfarande för att skilja avslut, väntan och fel. Se [UNDERSOKNING.md](UNDERSOKNING.md).

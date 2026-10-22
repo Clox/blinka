@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Blinka",
-  "version": "0.8.0",
-  "description": "Favicon-bevakning och förhandsvisning av en kvitterbar flikgruppssignal.",
+  "version": "0.9.0",
+  "description": "Kvitterbar flikgruppssignal när ChatGPT slutar styra en flik.",
   "permissions": ["tabs", "tabGroups", "storage", "alarms"],
   "background": {"service_worker": "background.js"},
   "action": {"default_title": "Blinka", "default_popup": "popup.html"}

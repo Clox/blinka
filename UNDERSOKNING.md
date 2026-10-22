@@ -8,16 +8,16 @@ Senast uppdaterad 2026-10-23. Aktiv Chrome-profil: `Default`. ChatGPT-tillägg: 
 - ChatGPT-tilläggets manifest och bakgrundskod erbjuder inget påvisat externt meddelandegränssnitt för arbetsstatus. Interna meddelanden kontrollerar avsändare från det egna tillägget.
 - När ChatGPTs webbläsaragent tar en vanlig flik i arbete injicerar tillägget ibland `content-scripts/codex.js` där. Det ändrar sidans favicon till en SVG-märkt variant. Koden känner lägena `active`, `deliverable` och `handoff`; `active` följer en aktiv agentkoppling till fliken.
 - Blinka observerade `active` via `tabs.onUpdated` och `favIconUrl` med rätt `tabId` i användarens verkliga sidopanelsarbetsflöde. Det skedde både när användaren stannade på arbetsfliken och när användaren bytte flik. Efter bakgrundsprovet stod det `Nu: ingen. Senast: aktiv`.
-- `deliverable` och `handoff` används bara för särskilt markerade agentflikar; ett slutmärke behålls bara om fliken inte är synlig när turen avslutas. Inget sådant märke sågs i användarens prov. Övergången `active → ingen` får inte ensam tolkas som klart, väntan eller fel.
+- `deliverable` och `handoff` används bara för särskilt markerade agentflikar; ett slutmärke behålls bara om fliken inte är synlig när turen avslutas. Inget sådant märke sågs i användarens prov. ChatGPT-koden släpper också flikkopplingen vid exempelvis avbruten eller förlorad session. Övergången `active → ingen` visar att agenten inte längre styr fliken, men kan inte ensam avgöra klart, väntan eller fel.
 - Ett separat manuellt gruppfärgtest verifierade tidigare färgväxling och återställning efter kvittering. Det testet sa inget om ChatGPTs arbetsstatus.
 
 ## Nuvarande avgränsning
 
-Version 0.8.0 har kvar favicon-observationen och en knapp för att **manuellt simulera hur en framtida färdigsignal skulle se ut**. Simuleringen börjar bara vid knapptryck, växlar flikgruppens färg via MV3-alarm och slutar först vid kvittering. Den aktiveras inte av `active`, `active → ingen` eller någon annan favicon-händelse. Basfärgen återställs endast om gruppen fortfarande har Blinkas förväntade färg; yttre färgändringar pausar signalen. Knappen för att begära uppmärksamhet för hela Chrome-fönstret är borttagen.
+Version 0.9.0 startar automatiskt en **kontrollsignal** vid observerad `active → vanlig favicon` på samma flik. Signalen växlar flikgruppens färg via MV3-alarm och slutar först vid kvittering. Den börjar inte när `active` visas. En knapp kan starta samma färgväxling manuellt som test. Basfärgen återställs endast om gruppen fortfarande har Blinkas förväntade färg; yttre färgändringar pausar signalen. Knappen för att begära uppmärksamhet för hela Chrome-fönstret är borttagen.
 
 Äldre parnings-, starttext-, MCP-, plugin- och serverlösningar är borttagna ur projektet. Privata Blinka-testpluginer har avinstallerats. Cloudflare Worker `blinka-signal`, dess D1-databas och den lokala användartjänsten har raderats eller stoppats. Git-historiken behåller undersökningsspåren.
 
-Nästa tekniska fråga är om agentens webbläsararbetsflöde ger en mer specifik, observerbar slut- eller överlämningssignal. Tills dess förblir färdigsignalen en manuell förhandsvisning.
+Nästa tekniska fråga är hur ofta `active → vanlig favicon` inträffar för tidigt eller uteblir i verkliga jobb, samt om agentens webbläsararbetsflöde ger en mer specifik slut- eller överlämningssignal. Den nuvarande signalen ska tolkas som **kontrollera ChatGPT**, inte som bevis för ett lyckat avslut.
 
 ## Källor
 

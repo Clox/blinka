@@ -86,10 +86,9 @@ async function paint(state) {
     }
   }
 }
-async function startPreview(tabId) {
-  const state=await read();
+async function addAttention(state,tabId,source) {
   await reconcile(state);
-  if (Object.values(state.previews).some(preview=>preview.tabId===tabId)) return state;
+  if (source==="manual" && Object.values(state.previews).some(preview=>preview.tabId===tabId && preview.source!=="favicon")) return state;
   const tab=await getTab(tabId);
   if (!tab) throw new Error("Fliken finns inte längre.");
   let groupId=tab.groupId;
@@ -107,8 +106,13 @@ async function startPreview(tabId) {
   if (!group) throw new Error("Flikgruppen finns inte längre.");
   if (!state.groups[groupId]) state.groups[groupId]={baseColor:group.color,expected:group.color,paused:false};
   const id=crypto.randomUUID();
-  state.previews[id]={id,tabId,groupId};
+  state.previews[id]={id,tabId,groupId,source};
   await paint(state);
+  return state;
+}
+async function startPreview(tabId) {
+  const state=await read();
+  await addAttention(state,tabId,"manual");
   await save(state);
   await setupAlarm(state);
   return state;
@@ -144,6 +148,10 @@ async function recordFavicon(tabId,url) {
     lastBadge:badge || prior?.lastBadge || null,
     lastBadgeAt:badge ? Date.now() : prior?.lastBadgeAt || null,
   };
+  if (prior?.current==="active" && badge===null) {
+    await addAttention(state,tabId,"favicon");
+    await setupAlarm(state);
+  }
   await save(state);
 }
 async function refreshState() {

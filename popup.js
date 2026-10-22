@@ -18,24 +18,31 @@ async function refresh() {
   $("faviconProbe").textContent=!favicon?.lastBadge
     ? "Ingen ChatGPT-markör observerad på den här fliken."
     : `Nu: ${names[favicon.current] || "ingen"}. Senast: ${names[favicon.lastBadge]} ${new Date(favicon.lastBadgeAt).toLocaleTimeString()}.`;
-  const preview=Object.values(state.previews).find(item=>item.tabId===tab?.id);
-  $("preview").disabled=tab?.id == null || Boolean(preview);
+  const jobs=Object.values(state.previews).filter(item=>item.tabId===tab?.id);
+  const manual=jobs.find(item=>item.source!=="favicon");
+  $("preview").disabled=tab?.id == null || Boolean(manual);
   $("preview").onclick=()=>run(()=>send({type:"preview",tabId:tab.id}));
   $("previewControls").replaceChildren();
-  if (preview) {
+  for (const job of jobs) {
+    const row=document.createElement("div");
+    row.textContent=job.source==="favicon"
+      ? "ChatGPT slutade styra fliken – kontrollera resultatet. "
+      : "Simulerad färdigsignal. ";
     const ack=document.createElement("button");
-    ack.textContent="Kvittera simulering";
-    ack.onclick=()=>run(()=>send({type:"ack",id:preview.id}));
-    $("previewControls").append(ack);
+    ack.textContent="Kvittera";
+    ack.onclick=()=>run(()=>send({type:"ack",id:job.id}));
+    row.append(ack);
+    $("previewControls").append(row);
   }
-  const group=preview?.groupId>=0 ? state.groups[preview.groupId] : null;
-  $("previewStatus").textContent=preview
+  const groupId=jobs.find(item=>item.groupId>=0)?.groupId;
+  const group=groupId == null ? null : state.groups[groupId];
+  $("previewStatus").textContent=jobs.length
     ? group?.paused ? "Färgväxlingen pausades efter en annan färgändring." : group ? "Färgväxlingen pågår tills du kvitterar." : "Fliken har lämnat den signalerande gruppen."
-    : "Ingen simulering på denna flik.";
+    : "Ingen signal att kvittera på denna flik.";
   if (group?.paused) {
     const resume=document.createElement("button");
     resume.textContent="Återuppta färgväxling";
-    resume.onclick=()=>run(()=>send({type:"resume",groupId:preview.groupId}));
+    resume.onclick=()=>run(()=>send({type:"resume",groupId}));
     $("previewControls").append(resume);
   }
 }
