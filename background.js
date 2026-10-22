@@ -1,6 +1,6 @@
 const KEY = "blinkaFaviconV1";
 const LEGACY_KEY = "blinkaManualV1";
-const LEGACY_ALARM = "blinkaColorTick";
+const ALARM = "blinkaColorTick";
 let queue = Promise.resolve();
 function serial(fn) { const next=queue.then(fn); queue=next.catch(console.error); return next; }
 
@@ -14,10 +14,17 @@ function chatgptFaviconBadge(url) {
   return "active";
 }
 
+function normalize(state) {
+  state.tabs ||= {};
+  state.previews ||= {};
+  state.groups ||= {};
+  state.owned ||= {};
+  return state;
+}
 async function read() {
   const stored=await chrome.storage.local.get([KEY,LEGACY_KEY]);
   const old=stored[LEGACY_KEY];
-  if (!old && stored[KEY]) return stored[KEY];
+  if (!old && stored[KEY]) return normalize(stored[KEY]);
   for (const [id,record] of Object.entries(old?.groups || {})) {
     let group;
     try { group=await chrome.tabGroups.get(Number(id)); } catch { continue; }
@@ -25,13 +32,107 @@ async function read() {
       await chrome.tabGroups.update(Number(id),{color:record.baseColor});
     }
   }
-  await chrome.alarms.clear(LEGACY_ALARM);
-  const state={tabs:stored[KEY]?.tabs || old?.probes?.faviconTabs || {}};
-  await chrome.storage.local.set({[KEY]:state});
+  await chrome.alarms.clear(ALARM);
+  const state=normalize(stored[KEY] || {tabs:old?.probes?.faviconTabs || {}});
+  await save(state);
   if (old) await chrome.storage.local.remove(LEGACY_KEY);
   return state;
 }
-
+async function save(state) { await chrome.storage.local.set({[KEY]:state}); }
+async function getTab(id) { try { return await chrome.tabs.get(Number(id)); } catch { return null; } }
+async function getGroup(id) { try { return await chrome.tabGroups.get(Number(id)); } catch { return null; } }
+async function setupAlarm(state) {
+  if (Object.keys(state.previews).length) await chrome.alarms.create(ALARM,{periodInMinutes:0.5});
+  else await chrome.alarms.clear(ALARM);
+}
+async function reconcile(state) {
+  for (const [id,preview] of Object.entries(state.previews)) {
+    const tab=await getTab(preview.tabId);
+    if (!tab) { delete state.previews[id]; continue; }
+    preview.groupId=tab.groupId;
+    if (tab.groupId>=0 && !state.groups[tab.groupId]) {
+      const group=await getGroup(tab.groupId);
+      if (group) state.groups[tab.groupId]={baseColor:group.color,expected:group.color,paused:false};
+    }
+  }
+  for (const [id,record] of Object.entries(state.groups)) {
+    if (!Object.values(state.previews).some(preview=>preview.groupId===Number(id))) {
+      const group=await getGroup(id);
+      if (group && !record.paused && group.color===record.expected) {
+        await chrome.tabGroups.update(Number(id),{color:record.baseColor});
+      }
+      delete state.groups[id];
+    } else if (!(await getGroup(id))) delete state.groups[id];
+  }
+  for (const [windowId,groupId] of Object.entries(state.owned)) {
+    if (!(await getGroup(groupId))) delete state.owned[windowId];
+  }
+}
+async function paint(state) {
+  for (const [id,record] of Object.entries(state.groups)) {
+    if (record.paused) continue;
+    const group=await getGroup(id);
+    if (!group) continue;
+    if (group.color!==record.expected) {
+      record.baseColor=group.color;
+      record.expected=group.color;
+      record.paused=true;
+      continue;
+    }
+    const color=record.expected==="red" ? "yellow" : "red";
+    if (group.color!==color) {
+      record.expected=color;
+      await chrome.tabGroups.update(Number(id),{color});
+    }
+  }
+}
+async function startPreview(tabId) {
+  const state=await read();
+  await reconcile(state);
+  if (Object.values(state.previews).some(preview=>preview.tabId===tabId)) return state;
+  const tab=await getTab(tabId);
+  if (!tab) throw new Error("Fliken finns inte längre.");
+  let groupId=tab.groupId;
+  if (groupId<0) {
+    const prior=state.owned[tab.windowId];
+    const group=prior==null ? null : await getGroup(prior);
+    if (group?.windowId===tab.windowId) groupId=await chrome.tabs.group({tabIds:[tabId],groupId:prior});
+    else {
+      groupId=await chrome.tabs.group({tabIds:[tabId],createProperties:{windowId:tab.windowId}});
+      state.owned[tab.windowId]=groupId;
+      await chrome.tabGroups.update(groupId,{title:"Blinka"});
+    }
+  }
+  const group=await getGroup(groupId);
+  if (!group) throw new Error("Flikgruppen finns inte längre.");
+  if (!state.groups[groupId]) state.groups[groupId]={baseColor:group.color,expected:group.color,paused:false};
+  const id=crypto.randomUUID();
+  state.previews[id]={id,tabId,groupId};
+  await paint(state);
+  await save(state);
+  await setupAlarm(state);
+  return state;
+}
+async function ackPreview(id) {
+  const state=await read();
+  if (!state.previews[id]) throw new Error("Förhandsvisningen finns inte längre.");
+  delete state.previews[id];
+  await reconcile(state);
+  await save(state);
+  await setupAlarm(state);
+  return state;
+}
+async function resumeGroup(groupId) {
+  const state=await read();
+  const record=state.groups[groupId],group=await getGroup(groupId);
+  if (!record || !group) throw new Error("Flikgruppen finns inte längre.");
+  record.baseColor=group.color;
+  record.expected=group.color;
+  record.paused=false;
+  await paint(state);
+  await save(state);
+  return state;
+}
 async function recordFavicon(tabId,url) {
   const badge=chatgptFaviconBadge(url);
   const state=await read();
@@ -43,28 +144,60 @@ async function recordFavicon(tabId,url) {
     lastBadge:badge || prior?.lastBadge || null,
     lastBadgeAt:badge ? Date.now() : prior?.lastBadgeAt || null,
   };
-  await chrome.storage.local.set({[KEY]:state});
+  await save(state);
+}
+async function refreshState() {
+  const state=await read();
+  await reconcile(state);
+  await save(state);
+  await setupAlarm(state);
+  return state;
 }
 
 chrome.runtime.onMessage.addListener((message,_sender,respond)=>{
-  if (message?.type!=="state" && message?.type!=="attention") return false;
+  if (!["state","preview","ack","resume"].includes(message?.type)) return false;
   serial(async()=>{
-    if (message.type==="state") return {ok:true,state:await read()};
-    if (!Number.isSafeInteger(message.windowId)) throw new Error("Ogiltigt fönster-ID.");
-    await chrome.windows.update(message.windowId,{drawAttention:true});
-    return {ok:true};
-  })
-    .then(respond,error=>respond({ok:false,error:String(error?.message || error)}));
+    if (message.type==="state") return {ok:true,state:await refreshState()};
+    if (message.type==="preview") return {ok:true,state:await startPreview(message.tabId)};
+    if (message.type==="ack") return {ok:true,state:await ackPreview(message.id)};
+    return {ok:true,state:await resumeGroup(message.groupId)};
+  }).then(respond,error=>respond({ok:false,error:String(error?.message || error)}));
   return true;
+});
+chrome.alarms.onAlarm.addListener(alarm=>{
+  if (alarm.name!==ALARM) return;
+  serial(async()=>{
+    const state=await read();
+    await reconcile(state);
+    await paint(state);
+    await save(state);
+    await setupAlarm(state);
+  });
 });
 chrome.tabs.onUpdated.addListener((tabId,change)=>{
   if (change.favIconUrl!==undefined) serial(()=>recordFavicon(tabId,change.favIconUrl));
+  if (change.groupId!==undefined) serial(()=>refreshState());
 });
 chrome.tabs.onRemoved.addListener(tabId=>serial(async()=>{
   const state=await read();
-  if (!(tabId in state.tabs)) return;
   delete state.tabs[tabId];
-  await chrome.storage.local.set({[KEY]:state});
+  await reconcile(state);
+  await save(state);
+  await setupAlarm(state);
 }));
-chrome.runtime.onInstalled.addListener(()=>serial(()=>read()));
-chrome.runtime.onStartup.addListener(()=>serial(()=>read()));
+chrome.tabs.onDetached.addListener(()=>serial(()=>refreshState()));
+chrome.tabGroups.onUpdated.addListener(group=>serial(async()=>{
+  const state=await read();
+  const record=state.groups[group.id];
+  if (!record) return;
+  const current=await getGroup(group.id);
+  if (current && current.color!==record.expected) {
+    record.baseColor=current.color;
+    record.expected=current.color;
+    record.paused=true;
+    await save(state);
+  }
+}));
+chrome.tabGroups.onRemoved.addListener(()=>serial(()=>refreshState()));
+chrome.runtime.onInstalled.addListener(()=>serial(()=>refreshState()));
+chrome.runtime.onStartup.addListener(()=>serial(()=>refreshState()));

@@ -4,25 +4,24 @@ Senast uppdaterad 2026-10-23. Aktiv Chrome-profil: `Default`. ChatGPT-tillägg: 
 
 ## Verifierat
 
-- Sidopanelen består av en tilläggssida som visar `chatgpt.com` i en inbäddad ram. Blinkas gamla innehållsskript nådde vanliga ChatGPT-flikar men gav ingen träff i sidopanelens iframe, trots att panelen var öppen. Detta visar utebliven åtkomst i den provade konfigurationen, inte ett allmänt bevis för att varje tänkbar metod är omöjlig. Den gamla iframe-proben är borttagen ur Blinka 0.6.0.
-- ChatGPT-tilläggets manifest och bakgrundskod erbjuder inget påvisat externt meddelandegränssnitt för arbetsstatus. Interna meddelanden kontrollerar avsändare från det egna tillägget. Chrome stöder kommunikation mellan tillägg, men det skapar inte ett protokoll som ChatGPT-tillägget inte erbjuder.
-- När ChatGPTs webbläsaragent tar en vanlig flik i arbete kan tillägget injicera `content-scripts/codex.js` där. Det ändrar sidans favicon till en SVG-märkt variant. Koden använder lägena `active`, `deliverable` och `handoff`; bakgrundskoden härleder `active` från en aktiv agentkoppling till fliken.
-- Blinka 0.5.1 observerade `active` via `tabs.onUpdated` och `favIconUrl` med rätt `tabId` i användarens verkliga sidopanelsarbetsflöde. Detta skedde både när användaren stannade på arbetsfliken och när användaren bytte flik. I det senare fallet visade popupen efteråt `Nu: ingen. Senast: aktiv`.
-- ChatGPTs `deliverable`/`handoff` används bara för särskilt markerade agentflikar, och ett slutmärke behålls bara om fliken inte är synlig när turen avslutas. Inget sådant märke sågs i användarens prov. Övergången `active → ingen` är inte en säker signal för klart, väntan eller fel.
-- Ett manuellt färgtest verifierade tidigare att flikgrupper kan växla färg och återställas efter kvittering. Det testet var frikopplat från ChatGPTs arbete och är borttaget i version 0.7.0.
+- Sidopanelen består av en tilläggssida som visar `chatgpt.com` i en inbäddad ram. Blinkas gamla innehållsskript nådde vanliga ChatGPT-flikar men gav ingen träff i sidopanelens iframe, trots att panelen var öppen. Det visar utebliven åtkomst i den provade konfigurationen, inte ett allmänt förbud. Iframe-proben är borttagen.
+- ChatGPT-tilläggets manifest och bakgrundskod erbjuder inget påvisat externt meddelandegränssnitt för arbetsstatus. Interna meddelanden kontrollerar avsändare från det egna tillägget.
+- När ChatGPTs webbläsaragent tar en vanlig flik i arbete injicerar tillägget ibland `content-scripts/codex.js` där. Det ändrar sidans favicon till en SVG-märkt variant. Koden känner lägena `active`, `deliverable` och `handoff`; `active` följer en aktiv agentkoppling till fliken.
+- Blinka observerade `active` via `tabs.onUpdated` och `favIconUrl` med rätt `tabId` i användarens verkliga sidopanelsarbetsflöde. Det skedde både när användaren stannade på arbetsfliken och när användaren bytte flik. Efter bakgrundsprovet stod det `Nu: ingen. Senast: aktiv`.
+- `deliverable` och `handoff` används bara för särskilt markerade agentflikar; ett slutmärke behålls bara om fliken inte är synlig när turen avslutas. Inget sådant märke sågs i användarens prov. Övergången `active → ingen` får inte ensam tolkas som klart, väntan eller fel.
+- Ett separat manuellt gruppfärgtest verifierade tidigare färgväxling och återställning efter kvittering. Det testet sa inget om ChatGPTs arbetsstatus.
 
-## Beslut i version 0.6.0
+## Nuvarande avgränsning
 
-Parning av flik till extern server, kopierad starttext, MCP-plugin, modellrapporterade statuslägen och signalserver har tagits bort. Privata Blinka-testpluginer har avinstallerats. Cloudflare Worker `blinka-signal` och D1-databasen med samma namn har raderats; den lokala användartjänsten `blinka-signal.service` har stoppats och tagits bort. Historiken finns i Git om en framtida undersökning behöver jämföra metoder.
+Version 0.8.0 har kvar favicon-observationen och en knapp för att **manuellt simulera hur en framtida färdigsignal skulle se ut**. Simuleringen börjar bara vid knapptryck, växlar flikgruppens färg via MV3-alarm och slutar först vid kvittering. Den aktiveras inte av `active`, `active → ingen` eller någon annan favicon-händelse. Basfärgen återställs endast om gruppen fortfarande har Blinkas förväntade färg; yttre färgändringar pausar signalen. Knappen för att begära uppmärksamhet för hela Chrome-fönstret är borttagen.
 
-Version 0.7.0 tar även bort det manuella färgtestet, färgalarm, jobb och kvitteringsknappar. Vid uppdateringen återställs en grupps basfärg bara om den fortfarande har den färg Blinka senast satte; yttre ändringar skrivs inte över. `tabGroups` och `alarms` finns tillfälligt kvar som behörigheter för denna engångsstädning. Version 0.7.1 behåller den separata knappen som manuellt anropar `chrome.windows.update(windowId, {drawAttention:true})`; den startar ingen status- eller färgsignal. Effekten på användarens Linux-aktivitetsfält är ännu inte verifierad.
+Äldre parnings-, starttext-, MCP-, plugin- och serverlösningar är borttagna ur projektet. Privata Blinka-testpluginer har avinstallerats. Cloudflare Worker `blinka-signal`, dess D1-databas och den lokala användartjänsten har raderats eller stoppats. Git-historiken behåller undersökningsspåren.
 
-Blinka observerar favicon-markören och har ett manuellt fönsterprov. Den gör **ingen automatisk bedömning av färdig uppgift**. Nästa tekniska fråga är om agentens webbläsararbetsflöde ger en mer specifik, observerbar slut- eller överlämningssignal. En paus eller försvunnen `active`-markör räcker inte som bevis.
+Nästa tekniska fråga är om agentens webbläsararbetsflöde ger en mer specifik, observerbar slut- eller överlämningssignal. Tills dess förblir färdigsignalen en manuell förhandsvisning.
 
 ## Källor
 
 - [Chrome: `tabs.onUpdated` och `favIconUrl`](https://developer.chrome.com/docs/extensions/reference/api/tabs#event-onUpdated)
-- [Chrome: innehållsskript](https://developer.chrome.com/docs/extensions/develop/concepts/content-scripts)
+- [Chrome: `tabGroups`](https://developer.chrome.com/docs/extensions/reference/api/tabGroups)
 - [Chrome: MV3 service worker-livscykel](https://developer.chrome.com/docs/extensions/develop/concepts/service-workers/lifecycle)
 - [Chrome: alarm](https://developer.chrome.com/docs/extensions/reference/api/alarms)
-- [Chrome: `windows.update` och `drawAttention`](https://developer.chrome.com/docs/extensions/reference/api/windows)
