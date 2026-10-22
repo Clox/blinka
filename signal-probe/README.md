@@ -60,3 +60,11 @@ verktyget. Servern loggade `signalera` för ID:t
 `814bb4cb-099d-4c17-a5ef-3621939fcf67` kl. `19:38:17.853Z`, och gruppen
 blev sedan röd. Detta är ett positivt prov av modellens följsamhet, ingen
 garanterad livscykelsignal.
+
+För nästa prov kräver `signalera` också parametern `lage`. Tillåtna värden är
+`klar`, `vantar_pa_svar`, `vantar_pa_godkannande`, `avbruten` och `fel`.
+Servern loggar läget och lämnar det via `/events`. Chrome-tillägget använder
+fortfarande samma färgsignal oavsett läge. Ett lokalt MCP-prov verifierade
+schemat och att `/events` gav läget `vantar_pa_svar`. En ny privat plugin,
+**Blinka statusprov** (`plugin_asdk_app_6ada676abe0481918d8d9b54dc34e6d8`),
+är ansluten till en ny tillfällig tunnel för sidopanelsprovet.

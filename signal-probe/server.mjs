@@ -31,17 +31,18 @@ function json(res, code, value) {
 
 function makeMcpServer() {
   const server = new McpServer(
-    { name: "blinka-signal-probe", version: "0.2.0" },
-    { instructions: "Blinka behavior test: When the user provides a Blinka pairing ID in the current message, complete their harmless test task, then call signalera with that exact ID once before your final reply. Do not call without an ID or if the user asks you not to signal. This is a model-guided attention signal, not independent proof that browser work is complete. Never infer completion from inactivity." },
+    { name: "blinka-signal-probe", version: "0.3.0" },
+    { instructions: "Blinka behavior test: When the current user message includes a Blinka pairing ID, call signalera with that ID and your observed handoff reason once immediately before your reply. Use klar only after finishing the requested task, vantar_pa_svar when asking the user for missing input, and fel only after an actual failure. Do not signal without an ID or if the user asks you not to. This is model-reported status, not proof of browser work; never infer completion from inactivity." },
   );
 
   server.registerTool(
     "signalera",
     {
       title: "Signalera till Blinka (transportprov)",
-      description: "Send one attention signal to the Chrome tab paired with the Blinka ID in the user's current message. For the Blinka behavior test, call this once after finishing the user's harmless test task and before your final reply, even if the user does not explicitly name this tool. Do not call without a pairing ID or if the user asks you not to signal. This reports your own decision, not independently verified work status.",
+      description: "Send one model-reported handoff signal to the Chrome tab paired with the Blinka ID in the current user message. In this test call once before replying, even if the user does not name this tool. Choose klar for completed work, vantar_pa_svar for a question that blocks progress, vantar_pa_godkannande for required approval, avbruten only for a known interruption, or fel for an actual failure. Do not call without an ID or against the user's request. This is not independent verification of work status.",
       inputSchema: {
         probe_id: z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/),
+        lage: z.enum(["klar", "vantar_pa_svar", "vantar_pa_godkannande", "avbruten", "fel"]),
       },
       annotations: {
         readOnlyHint: false,
@@ -49,14 +50,15 @@ function makeMcpServer() {
         openWorldHint: false,
       },
     },
-    async ({ probe_id }) => {
+    async ({ probe_id, lage }) => {
       const receivedAt = new Date().toISOString();
       const pair = getPair(probe_id);
       if (!pair) return { isError: true, content: [{ type: "text", text: "Okänt eller utgånget parnings-ID." }] };
       pair.status = "attention";
-      console.log(JSON.stringify({ event: "signalera", probe_id, receivedAt }));
+      pair.lage = lage;
+      console.log(JSON.stringify({ event: "signalera", probe_id, lage, receivedAt }));
       return {
-        content: [{ type: "text", text: `Blinka-servern tog emot parnings-ID ${probe_id} kl. ${receivedAt}.` }],
+        content: [{ type: "text", text: `Blinka-servern tog emot parnings-ID ${probe_id} med läget ${lage} kl. ${receivedAt}.` }],
       };
     },
   );
@@ -81,7 +83,7 @@ createServer(async (req, res) => {
       const { pair_id, read_token } = await readSmallJson(req);
       const pair = getPair(pair_id);
       if (!pair || pair.readToken !== read_token) return json(res, 404, { error: "Pairing not found" });
-      return json(res, 200, { status: pair.status });
+      return json(res, 200, { status: pair.status, lage: pair.lage ?? null });
     } catch { return json(res, 400, { error: "Invalid JSON" }); }
   }
   if (req.url !== "/mcp" || !["POST", "GET", "DELETE"].includes(req.method)) {

@@ -24,6 +24,8 @@ Detta prov kräver en tillfällig HTTPS-tunnel till `signal-probe/server.mjs` oc
 
 **Resultat hittills:** Ett uttryckligt `signalera`-anrop från den riktiga Chrome-sidopanelen nådde servern med samma parnings-ID som i meddelandet. Användaren såg därefter den parade gruppen bli röd. Detta visar transport och flikkoppling, men ingen automatisk detektion av ChatGPTs arbetsstatus.
 
+Den äldre pluginen **Blinka parningsprov** pekar på en stängd testtunnel. För nya prov används den separat registrerade **Blinka statusprov** och en ny tillfällig serveradress. Ändra testserverns HTTPS-adress i Blinka-popupen till den aktuella adressen innan **Para denna flik**. Adressen är avsiktligt inte sparad i projektet eftersom Quick Tunnel byter den vid omstart.
+
 1. Ladda om Blinka i `chrome://extensions` efter uppdateringen till version 0.2.1.
 2. Öppna Blinka-popupen på testfliken. Klistra in den aktuella testtunnelns HTTPS-adress (med eller utan `/mcp`) och klicka **Para denna flik**. Godkänn åtkomst till just testtunnelns domän när Chrome frågar.
 3. Popupen visar ett parnings-ID och knappen **Kopiera provtext**. Öppna en ny ChatGPT-chatt i sidopanelen på samma testflik. Välj `@Blinka parningsprov` och klistra in provtexten efter mentionen.
