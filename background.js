@@ -47,8 +47,13 @@ async function recordFavicon(tabId,url) {
 }
 
 chrome.runtime.onMessage.addListener((message,_sender,respond)=>{
-  if (message?.type!=="state") return false;
-  serial(async()=>({ok:true,state:await read()}))
+  if (message?.type!=="state" && message?.type!=="attention") return false;
+  serial(async()=>{
+    if (message.type==="state") return {ok:true,state:await read()};
+    if (!Number.isSafeInteger(message.windowId)) throw new Error("Ogiltigt fönster-ID.");
+    await chrome.windows.update(message.windowId,{drawAttention:true});
+    return {ok:true};
+  })
     .then(respond,error=>respond({ok:false,error:String(error?.message || error)}));
   return true;
 });

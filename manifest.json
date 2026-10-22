@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
   "name": "Blinka",
-  "version": "0.7.0",
-  "description": "Favicon-bevakning för ChatGPTs arbete på webbsidor.",
-  "permissions": ["tabs", "tabGroups", "storage", "alarms"],
+  "version": "0.7.1",
+  "description": "Favicon-bevakning och manuellt prov av fönstrets uppmärksamhet.",
+  "permissions": ["tabs", "tabGroups", "storage", "alarms", "windows"],
   "background": {"service_worker": "background.js"},
   "action": {"default_title": "Blinka", "default_popup": "popup.html"}
 }

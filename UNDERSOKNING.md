@@ -15,9 +15,9 @@ Senast uppdaterad 2026-10-23. Aktiv Chrome-profil: `Default`. ChatGPT-tillägg: 
 
 Parning av flik till extern server, kopierad starttext, MCP-plugin, modellrapporterade statuslägen och signalserver har tagits bort. Privata Blinka-testpluginer har avinstallerats. Cloudflare Worker `blinka-signal` och D1-databasen med samma namn har raderats; den lokala användartjänsten `blinka-signal.service` har stoppats och tagits bort. Historiken finns i Git om en framtida undersökning behöver jämföra metoder.
 
-Version 0.7.0 tar även bort det manuella färgtestet, färgalarm, jobb och kvitteringsknappar. Vid uppdateringen återställs en grupps basfärg bara om den fortfarande har den färg Blinka senast satte; yttre ändringar skrivs inte över. `tabGroups` och `alarms` finns tillfälligt kvar som behörigheter för denna engångsstädning.
+Version 0.7.0 tar även bort det manuella färgtestet, färgalarm, jobb och kvitteringsknappar. Vid uppdateringen återställs en grupps basfärg bara om den fortfarande har den färg Blinka senast satte; yttre ändringar skrivs inte över. `tabGroups` och `alarms` finns tillfälligt kvar som behörigheter för denna engångsstädning. Version 0.7.1 behåller den separata knappen som manuellt anropar `chrome.windows.update(windowId, {drawAttention:true})`; den startar ingen status- eller färgsignal. Effekten på användarens Linux-aktivitetsfält är ännu inte verifierad.
 
-Blinka observerar nu endast favicon-markören. Den gör **ingen automatisk bedömning av färdig uppgift**. Nästa tekniska fråga är om agentens webbläsararbetsflöde ger en mer specifik, observerbar slut- eller överlämningssignal. En paus eller försvunnen `active`-markör räcker inte som bevis.
+Blinka observerar favicon-markören och har ett manuellt fönsterprov. Den gör **ingen automatisk bedömning av färdig uppgift**. Nästa tekniska fråga är om agentens webbläsararbetsflöde ger en mer specifik, observerbar slut- eller överlämningssignal. En paus eller försvunnen `active`-markör räcker inte som bevis.
 
 ## Källor
 
@@ -25,3 +25,4 @@ Blinka observerar nu endast favicon-markören. Den gör **ingen automatisk bedö
 - [Chrome: innehållsskript](https://developer.chrome.com/docs/extensions/develop/concepts/content-scripts)
 - [Chrome: MV3 service worker-livscykel](https://developer.chrome.com/docs/extensions/develop/concepts/service-workers/lifecycle)
 - [Chrome: alarm](https://developer.chrome.com/docs/extensions/reference/api/alarms)
+- [Chrome: `windows.update` och `drawAttention`](https://developer.chrome.com/docs/extensions/reference/api/windows)

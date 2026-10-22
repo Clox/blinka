@@ -5,6 +5,7 @@
 <title>Blinka</title>
 <style>
   body{font:14px system-ui;width:330px;padding:12px;color:#182132}
+  button{padding:7px}
   .muted{color:#536070}
   #error{color:#a21d1d;white-space:pre-wrap}
 </style>
@@ -14,6 +15,10 @@
 <h2>Agentaktivitet</h2>
 <p id="faviconProbe"></p>
 <p class="muted">Markören kommer från flikens favicon. Att den försvinner betyder inte säkert att arbetet är klart.</p>
+<h2>Fönsterprov</h2>
+<button id="attention">Påkalla fönstrets uppmärksamhet</button>
+<p class="muted">Manuellt prov. Startar ingen signal från ChatGPT.</p>
+<p id="attentionStatus" class="muted"></p>
 <p id="error"></p>
 <script src="popup.js"></script>
 </html>
