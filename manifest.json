@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Blinka",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Prov av kvitterbar flikgruppssignal och parad MCP-signal från ChatGPT.",
   "permissions": ["tabs", "tabGroups", "storage", "alarms", "windows"],
   "optional_host_permissions": ["https://*.trycloudflare.com/*"],

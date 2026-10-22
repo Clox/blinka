@@ -103,6 +103,13 @@ async function ack(id) {
   const s=await read(); if (!s.jobs[id]) throw new Error("Jobbet finns inte längre.");
   delete s.jobs[id]; await reconcile(s); await save(s); await setupAlarm(s);
 }
+async function resume(groupId) {
+  const s=await read(); await reconcile(s);
+  const record=s.groups[groupId], group=await getGroup(groupId);
+  if (!record || !group) throw new Error("Gruppen finns inte längre.");
+  record.baseColor=group.color; record.expected=group.color; record.paused=false;
+  await paint(s); await save(s); await setupAlarm(s);
+}
 chrome.runtime.onMessage.addListener((message,sender,respond)=>{
   serial(async()=>{
     if (message?.type==="probe") {
@@ -121,6 +128,7 @@ chrome.runtime.onMessage.addListener((message,sender,respond)=>{
     if (message?.type==="add") return {ok:true,id:await add(message.tabId)};
     if (message?.type==="pair") return {ok:true,pairId:await pair(message.tabId,message.origin)};
     if (message?.type==="ack") { await ack(message.id); return {ok:true}; }
+    if (message?.type==="resume") { await resume(message.groupId); return {ok:true}; }
     if (message?.type==="attention") { await chrome.windows.update(message.windowId,{drawAttention:true}); return {ok:true}; }
     return {ok:false,error:"Okänt kommando"};
   }).then(respond,e=>respond({ok:false,error:String(e?.message||e)}));
@@ -130,6 +138,6 @@ chrome.alarms.onAlarm.addListener(alarm=>{if(alarm.name===ALARM) serial(async()=
 chrome.tabs.onUpdated.addListener((tabId,change)=>{if (change.groupId!==undefined) serial(async()=>{const s=await read(); await reconcile(s); await save(s); await setupAlarm(s);});});
 chrome.tabs.onRemoved.addListener(tabId=>serial(async()=>{const s=await read(); if(s.probes?.regularTabs) delete s.probes.regularTabs[tabId]; await reconcile(s); await save(s); await setupAlarm(s);}));
 chrome.tabs.onDetached.addListener(()=>serial(async()=>{const s=await read(); await reconcile(s); await save(s); await setupAlarm(s);}));
-chrome.tabGroups.onUpdated.addListener(group=>serial(async()=>{const s=await read(); const r=s.groups[group.id]; if(r && group.color!==r.expected){r.baseColor=group.color;r.expected=group.color;r.paused=true;await save(s);} }));
+chrome.tabGroups.onUpdated.addListener(group=>serial(async()=>{const s=await read(); const r=s.groups[group.id]; if(!r) return; const current=await getGroup(group.id); if(current && current.color!==r.expected){r.baseColor=current.color;r.expected=current.color;r.paused=true;await save(s);} }));
 chrome.tabGroups.onRemoved.addListener(()=>serial(async()=>{const s=await read(); await reconcile(s); await save(s); await setupAlarm(s);}));
 chrome.runtime.onStartup.addListener(()=>serial(async()=>{const s=await read(); await reconcile(s); await save(s); await setupAlarm(s);}));

@@ -37,5 +37,9 @@ och serverloggen innehöll samma ID. Det verifierar ett explicit MCP-anrop från
 just Chrome-sidopanelen. Den tillfälliga tunneln har därefter stängts.
 
 Det första provet verifierade inte att modellen automatiskt anropar verktyget
-vid avslut, väntan eller fel. Det nya parningsprovet ska verifiera att
-Blinka kan koppla en uttrycklig händelse till rätt testflik efter flikbyte.
+vid avslut, väntan eller fel. I det nya parningsprovet verifierades vägen från
+ett **direkt lokalt** MCP-anrop via servern till ett väntande jobb på rätt
+parad Chrome-flik. Den privata parningspluginen syntes ännu inte i användarens
+`@`-val i sidopanelen, så den sammanhängande vägen från just den pluginen i
+sidopanelen är inte verifierad. Gruppens färgväxling behöver provas efter
+Blinkas korrigering i version 0.2.1.

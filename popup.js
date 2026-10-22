@@ -30,7 +30,13 @@ async function refresh() {
   }
   if (!jobs.length) $("jobs").textContent="Inga väntande jobb på denna flik.";
   const group = tab?.groupId >= 0 ? state.groups[tab.groupId] : null;
-  $("group").textContent=group ? `Grupp ${tab.groupId}: ${group.paused ? "Pausad efter yttre färgändring" : "Signal aktiv"}. Ursprung: ${group.baseColor}.` : "Ingen aktiv Blinka-signal i denna grupp.";
+  $("group").replaceChildren();
+  $("group").append(group ? `Grupp ${tab.groupId}: ${group.paused ? "Pausad efter färgändring" : "Signal aktiv"}. Ursprung: ${group.baseColor}.` : "Ingen aktiv Blinka-signal i denna grupp.");
+  if (group?.paused) {
+    const button=document.createElement("button"); button.textContent="Återuppta signal";
+    button.onclick=()=>run(()=>send({type:"resume",groupId:tab.groupId}));
+    $("group").append(document.createElement("br"),button);
+  }
   const p=state.probes || {};
   const format = item => item ? `träffar ${item.count}, senast ${new Date(item.at).toLocaleTimeString()}, tabId ${item.tabId ?? "saknas"}, frameId ${item.frameId ?? "saknas"}` : "ingen träff";
   const current=p.regularTabs?.[tab?.id] || (p.regular?.tabId===tab?.id ? p.regular : null);
