@@ -5,18 +5,41 @@ import { z } from "zod";
 
 const port = Number(process.env.PORT ?? 8787);
 const host = process.env.HOST ?? "127.0.0.1";
+const pairs = new Map();
+const PAIR_LIFETIME_MS = 30 * 60 * 1000;
+
+function getPair(id) {
+  const pair = pairs.get(id);
+  if (pair && Date.now() - pair.createdAt < PAIR_LIFETIME_MS) return pair;
+  pairs.delete(id);
+  return null;
+}
+
+async function readSmallJson(req) {
+  let raw = "";
+  for await (const chunk of req) {
+    raw += chunk;
+    if (raw.length > 1024) throw new Error("Request too large");
+  }
+  return JSON.parse(raw);
+}
+
+function json(res, code, value) {
+  res.writeHead(code, { "Content-Type": "application/json", "Cache-Control": "no-store" });
+  res.end(JSON.stringify(value));
+}
 
 function makeMcpServer() {
   const server = new McpServer(
     { name: "blinka-signal-probe", version: "0.1.0" },
-    { instructions: "For an explicit Blinka transport test, call signalera with the user's probe ID. This tool only confirms that an MCP call reached the server; it does not update a tab or prove task completion." },
+    { instructions: "For an explicit Blinka pairing test, call signalera with the user's pairing ID. The tool queues one attention event for Blinka; it does not determine task completion or inspect browser tabs." },
   );
 
   server.registerTool(
     "signalera",
     {
       title: "Signalera till Blinka (transportprov)",
-      description: "Use only when the user explicitly asks for a Blinka transport test. Sends a short test ID to the Blinka probe server and returns a receipt. This does not change Chrome or determine work status.",
+      description: "Use only when the user explicitly asks for a Blinka pairing test. Sends a pairing ID to the Blinka probe server so the paired Chrome extension can show attention. This does not determine work status.",
       inputSchema: {
         probe_id: z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/),
       },
@@ -28,9 +51,12 @@ function makeMcpServer() {
     },
     async ({ probe_id }) => {
       const receivedAt = new Date().toISOString();
+      const pair = getPair(probe_id);
+      if (!pair) return { isError: true, content: [{ type: "text", text: "Okänt eller utgånget parnings-ID." }] };
+      pair.status = "attention";
       console.log(JSON.stringify({ event: "signalera", probe_id, receivedAt }));
       return {
-        content: [{ type: "text", text: `Blinka-servern tog emot test-ID ${probe_id} kl. ${receivedAt}.` }],
+        content: [{ type: "text", text: `Blinka-servern tog emot parnings-ID ${probe_id} kl. ${receivedAt}.` }],
       };
     },
   );
@@ -39,6 +65,25 @@ function makeMcpServer() {
 }
 
 createServer(async (req, res) => {
+  if (req.method === "POST" && req.url === "/pair") {
+    try {
+      const { pair_id, read_token } = await readSmallJson(req);
+      const valid = value => typeof value === "string" && /^[0-9a-f-]{36}$/.test(value);
+      if (!valid(pair_id) || !valid(read_token)) return json(res, 400, { error: "Invalid pairing data" });
+      if (pairs.size >= 100) return json(res, 429, { error: "Too many pairings" });
+      if (pairs.has(pair_id)) return json(res, 409, { error: "Pairing already exists" });
+      pairs.set(pair_id, { readToken: read_token, createdAt: Date.now(), status: "pending" });
+      return json(res, 200, { ok: true });
+    } catch { return json(res, 400, { error: "Invalid JSON" }); }
+  }
+  if (req.method === "POST" && req.url === "/events") {
+    try {
+      const { pair_id, read_token } = await readSmallJson(req);
+      const pair = getPair(pair_id);
+      if (!pair || pair.readToken !== read_token) return json(res, 404, { error: "Pairing not found" });
+      return json(res, 200, { status: pair.status });
+    } catch { return json(res, 400, { error: "Invalid JSON" }); }
+  }
   if (req.url !== "/mcp" || !["POST", "GET", "DELETE"].includes(req.method)) {
     res.writeHead(404).end("Not Found");
     return;

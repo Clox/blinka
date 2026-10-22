@@ -8,7 +8,7 @@ async function save(s) { await chrome.storage.local.set({[KEY]:s}); }
 async function getGroup(id) { try { return await chrome.tabGroups.get(Number(id)); } catch { return null; } }
 async function getTab(id) { try { return await chrome.tabs.get(Number(id)); } catch { return null; } }
 async function setupAlarm(s) {
-  if (Object.keys(s.jobs).some(id=>s.jobs[id].groupId >= 0)) await chrome.alarms.create(ALARM,{periodInMinutes:0.5});
+  if (Object.keys(s.pairs || {}).length || Object.keys(s.jobs).some(id=>s.jobs[id].groupId >= 0)) await chrome.alarms.create(ALARM,{periodInMinutes:0.5});
   else await chrome.alarms.clear(ALARM);
 }
 async function restore(groupId, record) {
@@ -45,8 +45,7 @@ async function paint(s) {
   }
   s.phase++;
 }
-async function add(tabId) {
-  const s=await read(); await reconcile(s);
+async function createJobInState(s,tabId,source="manual",pairId=null) {
   const tab=await getTab(tabId); if (!tab) throw new Error("Fliken finns inte längre.");
   let groupId=tab.groupId;
   if (groupId<0) {
@@ -61,8 +60,44 @@ async function add(tabId) {
   const group=await getGroup(groupId);
   if (!s.groups[groupId]) s.groups[groupId]={baseColor:group.color,expected:group.color,paused:false};
   else if (s.groups[groupId].paused) { s.groups[groupId].baseColor=group.color; s.groups[groupId].expected=group.color; s.groups[groupId].paused=false; }
-  const id=crypto.randomUUID(); s.jobs[id]={id,tabId,groupId};
+  const id=crypto.randomUUID(); s.jobs[id]={id,tabId,groupId,source,pairId};
+  return id;
+}
+async function add(tabId) {
+  const s=await read(); await reconcile(s);
+  const id=await createJobInState(s,tabId);
   await paint(s); await save(s); await setupAlarm(s); return id;
+}
+function endpoint(origin,path) { return `${origin}${path}`; }
+async function postJson(url,body) {
+  const response=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body),signal:AbortSignal.timeout(10000)});
+  if (!response.ok) throw new Error(`Servern svarade ${response.status}.`);
+  return response.json();
+}
+async function pair(tabId,origin) {
+  const url=new URL(origin);
+  if (url.protocol!=="https:" || !url.hostname.endsWith(".trycloudflare.com") || url.pathname!=="/") throw new Error("Ange HTTPS-adressen till testtunneln.");
+  if (!(await chrome.permissions.contains({origins:[`${url.origin}/*`]}))) throw new Error("Blinka saknar åtkomst till testtunneln.");
+  const tab=await getTab(tabId); if (!tab) throw new Error("Fliken finns inte längre.");
+  const s=await read(); s.pairs ||= {};
+  const pairId=crypto.randomUUID(), readToken=crypto.randomUUID();
+  await postJson(endpoint(url.origin,"/pair"),{pair_id:pairId,read_token:readToken});
+  s.pairs[pairId]={pairId,readToken,tabId,windowId:tab.windowId,origin:url.origin,createdAt:Date.now()};
+  await save(s); await setupAlarm(s); return pairId;
+}
+async function pollPairs(s) {
+  for (const [pairId,pair] of Object.entries(s.pairs || {})) {
+    if (Date.now()-pair.createdAt>30*60*1000 || !(await getTab(pair.tabId))) { delete s.pairs[pairId]; continue; }
+    try {
+      const result=await postJson(endpoint(pair.origin,"/events"),{pair_id:pairId,read_token:pair.readToken});
+      if (result.status!=="attention") continue;
+      const jobId=await createJobInState(s,pair.tabId,"plugin",pairId);
+      s.lastRemoteSignal={pairId,tabId:pair.tabId,jobId,at:Date.now()};
+      delete s.pairs[pairId];
+    } catch (error) {
+      s.lastRemoteError=String(error?.message||error);
+    }
+  }
 }
 async function ack(id) {
   const s=await read(); if (!s.jobs[id]) throw new Error("Jobbet finns inte längre.");
@@ -84,13 +119,14 @@ chrome.runtime.onMessage.addListener((message,sender,respond)=>{
     }
     if (message?.type==="state") { const s=await read(); await reconcile(s); await save(s); return {ok:true,state:s}; }
     if (message?.type==="add") return {ok:true,id:await add(message.tabId)};
+    if (message?.type==="pair") return {ok:true,pairId:await pair(message.tabId,message.origin)};
     if (message?.type==="ack") { await ack(message.id); return {ok:true}; }
     if (message?.type==="attention") { await chrome.windows.update(message.windowId,{drawAttention:true}); return {ok:true}; }
     return {ok:false,error:"Okänt kommando"};
   }).then(respond,e=>respond({ok:false,error:String(e?.message||e)}));
   return true;
 });
-chrome.alarms.onAlarm.addListener(alarm=>{if(alarm.name===ALARM) serial(async()=>{const s=await read(); await reconcile(s); await paint(s); await save(s); await setupAlarm(s);});});
+chrome.alarms.onAlarm.addListener(alarm=>{if(alarm.name===ALARM) serial(async()=>{const s=await read(); await reconcile(s); await pollPairs(s); await paint(s); await save(s); await setupAlarm(s);});});
 chrome.tabs.onUpdated.addListener((tabId,change)=>{if (change.groupId!==undefined) serial(async()=>{const s=await read(); await reconcile(s); await save(s); await setupAlarm(s);});});
 chrome.tabs.onRemoved.addListener(tabId=>serial(async()=>{const s=await read(); if(s.probes?.regularTabs) delete s.probes.regularTabs[tabId]; await reconcile(s); await save(s); await setupAlarm(s);}));
 chrome.tabs.onDetached.addListener(()=>serial(async()=>{const s=await read(); await reconcile(s); await save(s); await setupAlarm(s);}));

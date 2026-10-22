@@ -1,8 +1,11 @@
-# Minimalt MCP-transportprov
+# Minimalt MCP-parningsprov
 
-Den här servern har ett enda verktyg: `signalera({probe_id})`. Det skriver ett
-kort test-ID och mottagningstid till terminalen och returnerar ett kvitto.
-Den läser ingen konversation, identifierar ingen flik och ändrar inte Blinka.
+Den här servern har ett enda MCP-verktyg: `signalera({probe_id})`. Blinka
+registrerar först ett slumpmässigt parnings-ID via `/pair` och hämtar en
+händelse via `/events` med ett separat lästoken. Verktyget köar en händelse
+för rätt parnings-ID, skriver ID och tid till terminalen och returnerar ett
+kvitto. Servern läser ingen konversation och vet inte vilken Chrome-flik ID:t
+hör till; den kopplingen finns endast i Blinkas lokala lagring.
 
 ## Lokalt prov
 
@@ -21,16 +24,18 @@ För att ChatGPT ska nå servern krävs en separat, tillfällig HTTPS-anslutning
 och registrering som **custom MCP server** i ChatGPT Plugins. Vid provet den
 22 oktober 2026 startades en Cloudflare Quick Tunnel och pluginen
 **Blinka transportprov** skapades med ID
-`plugin_asdk_app_6ada5a14fe948191964ba9784988e78a`. HTTPS-vägen och
-verktygsregistreringen kontrollerades. Tunneladressen är tillfällig och ska
-inte sparas här. Använd bara påhittade test-ID:n; servern saknar
-användarautentisering och är inte byggd för verkliga jobb eller bestående drift.
+`plugin_asdk_app_6ada5a14fe948191964ba9784988e78a`. Det första explicita
+transportprovet från sidopanelen lyckades. Därefter byggdes ett parningsprov
+och den nya pluginen **Blinka parningsprov** registrerades med ID
+`plugin_asdk_app_6ada5ead1b24819194b1ee6e14d0f76a`. Tunneladresserna är
+tillfälliga och ska inte sparas här. Använd bara påhittade test-ID:n; servern
+saknar kontoautentisering och är inte byggd för verkliga jobb eller bestående drift.
 
 I en **ny sidopanelschatt** valde användaren `@Blinka transportprov` och bad
 om `signalera` med `probe_id` `panel-prov-1`. Sidopanelen visade serverns kvitto
 och serverloggen innehöll samma ID. Det verifierar ett explicit MCP-anrop från
 just Chrome-sidopanelen. Den tillfälliga tunneln har därefter stängts.
 
-Det verifierar ännu inte att modellen automatiskt anropar verktyget
-vid avslut, väntan eller fel, eller att Blinka kan koppla händelsen till rätt
-formulärflik. De frågorna kräver separata prov.
+Det första provet verifierade inte att modellen automatiskt anropar verktyget
+vid avslut, väntan eller fel. Det nya parningsprovet ska verifiera att
+Blinka kan koppla en uttrycklig händelse till rätt testflik efter flikbyte.

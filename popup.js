@@ -3,14 +3,29 @@ let activeTab;
 async function send(message) { const response = await chrome.runtime.sendMessage(message); if (!response?.ok) throw new Error(response?.error || "Okänt fel"); return response; }
 async function refresh() {
   const [tab] = await chrome.tabs.query({active:true,currentWindow:true}); activeTab=tab;
+  const savedEndpoint=await chrome.storage.local.get("blinkaEndpoint");
+  if (savedEndpoint.blinkaEndpoint && !$('endpoint').value) $('endpoint').value=savedEndpoint.blinkaEndpoint;
   $("tab").textContent = tab?.id == null ? "Ingen aktiv flik" : `Flik ${tab.id} i fönster ${tab.windowId}`;
   $("add").disabled = tab?.id == null;
+  $("pair").disabled = tab?.id == null;
   const {state} = await send({type:"state"});
+  $("pairs").replaceChildren();
+  const pairs=Object.values(state.pairs||{}).filter(p=>p.tabId===tab?.id);
+  for (const pair of pairs) {
+    const li=document.createElement("li"), id=document.createElement("span"), button=document.createElement("button");
+    id.className="code"; id.textContent=pair.pairId;
+    button.textContent="Kopiera provtext";
+    button.onclick=()=>run(async()=>{await navigator.clipboard.writeText(`Anropa verktyget signalera med probe_id ${pair.pairId}. Detta är bara ett parat transportprov.`);});
+    li.append("Parnings-ID: ",id,document.createElement("br"),button); $("pairs").append(li);
+  }
+  if (!pairs.length) $("pairs").textContent="Ingen väntande parning på denna flik.";
+  const last=state.lastRemoteSignal;
+  $("lastSignal").textContent=last ? `Senaste MCP-signal: flik ${last.tabId}, ${new Date(last.at).toLocaleTimeString()}.` : "Ingen MCP-signal mottagen av Blinka ännu.";
   const jobs = Object.values(state.jobs).filter(j=>j.tabId===tab?.id);
   $("jobs").replaceChildren();
   for (const job of jobs) {
     const li=document.createElement("li"), button=document.createElement("button");
-    li.append(`Jobb ${job.id.slice(0,8)} `); button.textContent="Kvittera";
+    li.append(`Jobb ${job.id.slice(0,8)}${job.source==="plugin" ? " (MCP)" : ""} `); button.textContent="Kvittera";
     button.onclick=()=>run(async()=>{await send({type:"ack",id:job.id});}); li.append(button); $("jobs").append(li);
   }
   if (!jobs.length) $("jobs").textContent="Inga väntande jobb på denna flik.";
@@ -27,5 +42,14 @@ async function refresh() {
 }
 async function run(fn) { $("error").textContent=""; try { await fn(); await refresh(); } catch(e) { $("error").textContent=e.message; } }
 $("add").onclick=()=>run(()=>send({type:"add",tabId:activeTab.id}));
+$("pair").onclick=()=>run(async()=>{
+  const url=new URL($("endpoint").value);
+  if (url.protocol!=="https:" || !url.hostname.endsWith(".trycloudflare.com")) throw new Error("Ange testtunnelns HTTPS-adress.");
+  const origin=url.origin;
+  const granted=await chrome.permissions.request({origins:[`${origin}/*`]});
+  if (!granted) throw new Error("Blinka behöver tillåtelse att nå testservern.");
+  await chrome.storage.local.set({blinkaEndpoint:origin});
+  await send({type:"pair",tabId:activeTab.id,origin});
+});
 $("attention").onclick=()=>run(()=>send({type:"attention",windowId:activeTab.windowId}));
 refresh().catch(e=>$("error").textContent=e.message);
