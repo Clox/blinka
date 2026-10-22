@@ -16,8 +16,11 @@ async function refresh() {
   if (!jobs.length) $("jobs").textContent="Inga väntande jobb på denna flik.";
   const group = tab?.groupId >= 0 ? state.groups[tab.groupId] : null;
   $("group").textContent=group ? `Grupp ${tab.groupId}: ${group.paused ? "Pausad efter yttre färgändring" : "Signal aktiv"}. Ursprung: ${group.baseColor}.` : "Ingen aktiv Blinka-signal i denna grupp.";
-  const p=state.probe;
-  $("probe").textContent=p ? `Iframe-prov: ${p.surface}, tabId ${p.tabId ?? "saknas"}, frameId ${p.frameId ?? "saknas"}, ${new Date(p.at).toLocaleTimeString()}` : "Iframe-prov: inget meddelande mottaget ännu.";
+  const p=state.probes || {};
+  const format = item => item ? `träffar ${item.count}, senast ${new Date(item.at).toLocaleTimeString()}, tabId ${item.tabId ?? "saknas"}, frameId ${item.frameId ?? "saknas"}` : "ingen träff";
+  $("probeRegular").textContent=`Vanlig ChatGPT-flik: ${format(p.regular)}`;
+  $("probePanel").textContent=`ChatGPT-sidopanelens iframe: ${format(p.panel)}`;
+  $("probeOtherFrame").textContent=`Annan inbäddad ChatGPT-ram: ${format(p.otherFrame)}`;
 }
 async function run(fn) { $("error").textContent=""; try { await fn(); await refresh(); } catch(e) { $("error").textContent=e.message; } }
 $("add").onclick=()=>run(()=>send({type:"add",tabId:activeTab.id}));

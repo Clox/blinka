@@ -71,7 +71,11 @@ async function ack(id) {
 chrome.runtime.onMessage.addListener((message,sender,respond)=>{
   serial(async()=>{
     if (message?.type==="probe") {
-      if (message.surface==="browser_side_chat") { const s=await read(); s.probe={surface:message.surface,tabId:sender.tab?.id ?? null,frameId:sender.frameId ?? null,at:Date.now()}; await save(s); }
+      const s=await read(); s.probes ||= {};
+      const kind=message.topFrame===false ? (message.surface==="browser_side_chat" ? "panel" : "otherFrame") : "regular";
+      const previous=s.probes[kind];
+      s.probes[kind]={count:(previous?.count||0)+1,tabId:sender.tab?.id ?? null,frameId:sender.frameId ?? null,at:Date.now()};
+      await save(s);
       return {ok:true};
     }
     if (message?.type==="state") { const s=await read(); await reconcile(s); await save(s); return {ok:true,state:s}; }
