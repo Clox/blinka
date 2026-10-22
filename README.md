@@ -22,9 +22,9 @@ Detta är ett fristående Manifest V3-tillägg för provning av en kvitterbar f�
 
 Detta prov kräver en tillfällig HTTPS-tunnel till `signal-probe/server.mjs` och den privata ChatGPT-pluginen **Blinka parningsprov**. Testservern tar bara emot slumpmässiga ID:n. Använd en ofarlig testflik utan privata formulärdata.
 
-**Resultat hittills:** Ett uttryckligt `signalera`-anrop från den riktiga Chrome-sidopanelen nådde servern med samma parnings-ID som i meddelandet. Användaren såg därefter den parade gruppen bli röd. Detta visar transport och flikkoppling, men ingen automatisk detektion av ChatGPTs arbetsstatus.
+**Resultat hittills:** Ett uttryckligt `signalera`-anrop från den riktiga Chrome-sidopanelen nådde servern med samma parnings-ID som i meddelandet. Användaren såg därefter den parade gruppen bli röd. I ett senare prov frågade modellen vilka två färger användaren menade, servern loggade `lage: vantar_pa_svar` för den parade fliken och användaren såg gruppen växla färg. Detta verifierar en modellstyrd signal för ett vänteläge, men ingen garanterad automatisk detektion av ChatGPTs arbetsstatus.
 
-Den äldre pluginen **Blinka parningsprov** pekar på en stängd testtunnel. För nya prov används den separat registrerade **Blinka statusprov** och en ny tillfällig serveradress. Ändra testserverns HTTPS-adress i Blinka-popupen till den aktuella adressen innan **Para denna flik**. Adressen är avsiktligt inte sparad i projektet eftersom Quick Tunnel byter den vid omstart.
+De äldre pluginerna **Blinka parningsprov** och **Blinka statusprov** pekar på stängda testtunnlar. Det senaste provet använde **Blinka statusprov 2** och en tillfällig serveradress. Ändra testserverns HTTPS-adress i Blinka-popupen till pluginens aktuella adress innan **Para denna flik**. Adressen är avsiktligt inte sparad i projektet eftersom Quick Tunnel byter den vid omstart.
 
 1. Ladda om Blinka i `chrome://extensions` efter uppdateringen till version 0.2.1.
 2. Öppna Blinka-popupen på testfliken. Klistra in den aktuella testtunnelns HTTPS-adress (med eller utan `/mcp`) och klicka **Para denna flik**. Godkänn åtkomst till just testtunnelns domän när Chrome frågar.

@@ -68,3 +68,12 @@ fortfarande samma färgsignal oavsett läge. Ett lokalt MCP-prov verifierade
 schemat och att `/events` gav läget `vantar_pa_svar`. En ny privat plugin,
 **Blinka statusprov** (`plugin_asdk_app_6ada676abe0481918d8d9b54dc34e6d8`),
 är ansluten till en ny tillfällig tunnel för sidopanelsprovet.
+
+Den första statustunneln upphörde att fungera. En ny privat plugin, **Blinka
+statusprov 2** (`plugin_asdk_app_6ada6aca42348191aa454c99b27acff8`),
+anslöts till en omstartad tunnel. I ett verkligt sidopanelsprov frågade
+ChatGPT vilka två färger användaren menade. Servern loggade `signalera` med
+`probe_id` `4736d6bd-0693-467a-b9b9-cf88652ffc00` och
+`lage: vantar_pa_svar` kl. `2026-10-22T20:01:37.847Z`. Användaren såg
+den parade gruppen växla färg. Detta är ett positivt enskilt prov av
+modellrapporterat vänteläge, inte en garanterad livscykelhändelse.
