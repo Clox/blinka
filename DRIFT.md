@@ -36,9 +36,13 @@ Tailscale-klienten är nu ansluten på datorn. Den lokala servern körs som
 `/home/oscar/.local/state/blinka/pairs.json` och startar om vid fel.
 Enhetsfilen finns i `signal-probe/blinka-signal.service` och en kopia är
 installerad i `~/.config/systemd/user/`. Den tidigare tillfälliga servern och
-Cloudflare-tunneln har stoppats. Tailscale Funnel är ännu inte aktiverat;
-Tailscale begär godkännande för att göra port 8787 offentligt nåbar, aktivera
-HTTPS-certifikat och ändra tailnet-policyn.
+Cloudflare-tunneln har stoppats. Tailscale-kontot har godkänt Funnel, men
+lokal aktivering kräver administratörsrättighet. Kommandot är
+`sudo tailscale funnel --bg 8787`; det väntar på användarens lösenord i en
+öppnad terminal. Datorns Tailscale-namn är `lenovard.tailc13527.ts.net`, så
+den förväntade MCP-adressen är
+`https://lenovard.tailc13527.ts.net/mcp`. Kontrollera med
+`tailscale funnel status` efter att kommandot lyckats.
 
 Efter godkännande: slå på Funnel för port 8787, verifiera MCP från
 sidopanelen på den fasta adressen och registrera pluginen en sista gång.
