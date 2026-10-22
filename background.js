@@ -4,6 +4,24 @@ const COLORS = ["red", "yellow"];
 const REMOTE_STATUSES = new Set(["klar", "vantar_pa_svar", "vantar_pa_godkannande", "avbruten", "fel"]);
 let queue = Promise.resolve();
 function serial(fn) { const next=queue.then(fn); queue=next.catch(console.error); return next; }
+function chatgptFaviconBadge(url) {
+  if (typeof url!=="string" || !url.startsWith("data:image/svg+xml,")) return null;
+  let svg;
+  try { svg=decodeURIComponent(url.slice("data:image/svg+xml,".length)); } catch { return null; }
+  if (!svg.includes('data-codex-favicon-badge="codex-favicon-badge"')) return null;
+  if (svg.includes('<circle cx="24" cy="24" r="7" fill="#22c55e"')) return "deliverable";
+  if (svg.includes('<circle cx="24" cy="24" r="7" fill="#facc15"')) return "handoff";
+  return "active";
+}
+async function recordFaviconProbe(tabId,url) {
+  const badge=chatgptFaviconBadge(url);
+  const s=await read(); s.probes ||= {}; s.probes.faviconTabs ||= {};
+  const prior=s.probes.faviconTabs[tabId];
+  if (!badge && !prior) return;
+  if (prior?.current===badge) return;
+  s.probes.faviconTabs[tabId]={current:badge,at:Date.now(),lastBadge:badge || prior?.lastBadge || null,lastBadgeAt:badge ? Date.now() : prior?.lastBadgeAt || null};
+  await save(s);
+}
 async function read() { return (await chrome.storage.local.get(KEY))[KEY] || {jobs:{},groups:{},owned:{},phase:0,probes:{}}; }
 async function save(s) { await chrome.storage.local.set({[KEY]:s}); }
 async function getGroup(id) { try { return await chrome.tabGroups.get(Number(id)); } catch { return null; } }
@@ -148,8 +166,11 @@ chrome.runtime.onMessage.addListener((message,sender,respond)=>{
   return true;
 });
 chrome.alarms.onAlarm.addListener(alarm=>{if(alarm.name===ALARM) serial(async()=>{const s=await read(); await reconcile(s); await pollPairs(s); await paint(s); await save(s); await setupAlarm(s);});});
-chrome.tabs.onUpdated.addListener((tabId,change)=>{if (change.groupId!==undefined) serial(async()=>{const s=await read(); await reconcile(s); await save(s); await setupAlarm(s);});});
-chrome.tabs.onRemoved.addListener(tabId=>serial(async()=>{const s=await read(); if(s.probes?.regularTabs) delete s.probes.regularTabs[tabId]; await reconcile(s); await save(s); await setupAlarm(s);}));
+chrome.tabs.onUpdated.addListener((tabId,change)=>{
+  if (change.favIconUrl!==undefined) serial(()=>recordFaviconProbe(tabId,change.favIconUrl));
+  if (change.groupId!==undefined) serial(async()=>{const s=await read(); await reconcile(s); await save(s); await setupAlarm(s);});
+});
+chrome.tabs.onRemoved.addListener(tabId=>serial(async()=>{const s=await read(); if(s.probes?.regularTabs) delete s.probes.regularTabs[tabId]; if(s.probes?.faviconTabs) delete s.probes.faviconTabs[tabId]; await reconcile(s); await save(s); await setupAlarm(s); }));
 chrome.tabs.onDetached.addListener(()=>serial(async()=>{const s=await read(); await reconcile(s); await save(s); await setupAlarm(s);}));
 chrome.tabGroups.onUpdated.addListener(group=>serial(async()=>{const s=await read(); const r=s.groups[group.id]; if(!r) return; const current=await getGroup(group.id); if(current && current.color!==r.expected){r.baseColor=current.color;r.expected=current.color;r.paused=true;await save(s);} }));
 chrome.tabGroups.onRemoved.addListener(()=>serial(async()=>{const s=await read(); await reconcile(s); await save(s); await setupAlarm(s);}));

@@ -1,6 +1,6 @@
 # Blinka – första tekniska provet
 
-Detta är ett fristående Manifest V3-tillägg för provning av en kvitterbar färgsignal. Version 0.5.0 förifyller den verifierade gemensamma serveradressen och ger en färdig starttext för ChatGPTs sidopanel. Flera **modellrapporterade lägen** från samma parning visas som separata kvitterbara jobb. Blinka avläser fortfarande ingen oberoende eller garanterad ChatGPT-arbetsstatus.
+Detta är ett fristående Manifest V3-tillägg för provning av en kvitterbar färgsignal. Version 0.5.1 förifyller den verifierade gemensamma serveradressen, ger en färdig starttext för ChatGPTs sidopanel och har ett läsprov för ChatGPTs favicon-markör på vanliga webbsidor. Flera **modellrapporterade lägen** från samma parning visas som separata kvitterbara jobb. Blinka avläser fortfarande ingen oberoende eller garanterad ChatGPT-arbetsstatus.
 
 ## Ladda i Chrome
 

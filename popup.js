@@ -51,6 +51,11 @@ async function refresh() {
     $("group").append(document.createElement("br"),button);
   }
   const p=state.probes || {};
+  const favicon=p.faviconTabs?.[tab?.id];
+  const faviconNames={active:"aktiv",deliverable:"resultat",handoff:"överlämning"};
+  $("faviconProbe").textContent= !favicon?.lastBadge
+    ? "Ingen ChatGPT-markör observerad på den här fliken."
+    : `Nu: ${faviconNames[favicon.current] || "ingen"}. Senast: ${faviconNames[favicon.lastBadge]} ${new Date(favicon.lastBadgeAt).toLocaleTimeString()}. Detta är ett diagnostiskt flikmärke, inte verifierad chattstatus.`;
   const format = item => item ? `träffar ${item.count}, senast ${new Date(item.at).toLocaleTimeString()}, tabId ${item.tabId ?? "saknas"}, frameId ${item.frameId ?? "saknas"}` : "ingen träff";
   const current=p.regularTabs?.[tab?.id] || (p.regular?.tabId===tab?.id ? p.regular : null);
   const chatgptTab=tab?.url?.startsWith("https://chatgpt.com/");

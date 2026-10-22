@@ -1,5 +1,17 @@
 # Teknisk undersökning, 2026-10-22
 
+## Nytt spår, 2026-10-23: markörer på den vanliga fliken
+
+En ny installerad katalog för ChatGPT-tillägget finns i profilen `Default`: version `1.26.1020.11845` under samma tilläggs-ID. Profilens `Preferences` pekar på just den versionen. Koden granskades läsbart utan att installationen ändrades. Manifestet har fortfarande ingen `externally_connectable` och bakgrundskoden saknar `runtime.onMessageExternal`/`onConnectExternal`. Den interna meddelandevägen validerar avsändare från det egna tillägget. Därmed finns fortsatt inget påvisat externt anrop för panelstatus eller för att öppna panelen med en prompt.
+
+**Sidopanelinjektion:** Sidopanelen är fortfarande en separat tilläggssida med en inbäddad `chatgpt.com`-sida. Blinkas tidigare `all_frames`-prov nådde vanliga ChatGPT-flikar men inte sidopanelens iframe i användarens faktiska Chrome. [`chrome.scripting.executeScript`](https://developer.chrome.com/docs/extensions/reference/api/scripting) riktar sig till en vanlig flik via `tabId`, inte till ett annat tilläggs panel som om den vore en ram i formulärfliken. Det är inte ett bevis för ett absolut förbud mot varje tänkbar specialmetod, men ingen standardväg är verifierad här.
+
+**Ny verifierad kodväg i formulärfliken:** Den installerade ChatGPT-koden injicerar vid behov `content-scripts/codex.js` i vanliga webbsidor. Den skapar `#codex-agent-overlay-root` för en agentmarkör och ändrar sidans favicon via ett `link`-element märkt `data-codex-favicon-badge="true"`. Koden känner lägena `active`, `deliverable`, `handoff`. Bakgrundskoden härleder `active` från en aktiv fliklease och sätter `deliverable`/`handoff` när en agents tur avslutas för flikar som markerats så. En slutmarkör rensas när fliken aktiveras eller fönstret får fokus. Markören är därför kopplad till en vanlig flik men uppfyller inte kravet att uppmärksamheten ska kvarstå tills Blinka kvitterats. Den säger heller inte säkert att sidopanelens svar är klart, väntar på användaren eller har fel; detta gäller agentens webbläsarfliklease. Frånvaro av markör är inte avslut.
+
+**Minimalt prov i Blinka 0.5.1:** [Chromes `tabs.onUpdated`](https://developer.chrome.com/docs/extensions/reference/api/tabs#event-onUpdated) kan ge `favIconUrl` tillsammans med `tabId`. Blinka registrerar bara om URL:en innehåller ChatGPT-kodens exakta SVG-markör och vilket av de tre märkena som ses. Hela favicon-URL:en, webbsidans innehåll och chattar sparas inte. Popupens *Tekniska prov → Favicon-prov* visar aktuell och senast observerad markör för den aktuella fliken. Detta är en hypotes tills ett riktigt sidopanelsjobb har gett en träff. Om Chrome inte vidarebefordrar den dynamiska faviconen via `tabs.onUpdated`, krävs ett separat DOM-prov med tillåtelse för just testflikens webbplats.
+
+**Nästa riktade kontroll:** Ladda om Blinka 0.5.1, kör ett vanligt ChatGPT Work-jobb i sidopanelen på en testflik och kontrollera *Favicon-prov* på just den fliken. En träff visar att det finns en extra observerbar, flikspecifik agentmarkör. Den skulle kunna komplettera automatisk flikidentifiering men inte ersätta MCP-signalen för kvitterbar status förrän samband med väntan, klart och fel är praktiskt verifierade.
+
 ## Miljö och källor
 
 - Chrome 156.0.8078.47 på Linux. Aktiv profil enligt Chromes `Local State`: `Default`, profilnamn Oscar. ChatGPT-tillägget finns endast där i de profiler som undersöktes.
