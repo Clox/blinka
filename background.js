@@ -78,7 +78,7 @@ async function postJson(url,body) {
 async function pair(tabId,origin) {
   const url=new URL(origin);
   if (url.protocol!=="https:" || !url.hostname || url.username || url.password || url.pathname!=="/" || url.search || url.hash) throw new Error("Ange en HTTPS-adress utan sökväg eller inloggningsuppgifter.");
-  if (!(await chrome.permissions.contains({origins:[`${url.origin}/*`]}))) throw new Error("Blinka saknar åtkomst till testtunneln.");
+  if (!(await chrome.permissions.contains({origins:[`${url.origin}/*`]}))) throw new Error("Blinka saknar åtkomst till signalservern.");
   const tab=await getTab(tabId); if (!tab) throw new Error("Fliken finns inte längre.");
   const s=await read(); s.pairs ||= {};
   const pairId=crypto.randomUUID(), readToken=crypto.randomUUID();
@@ -91,9 +91,9 @@ async function pollPairs(s) {
     if (Date.now()-pair.createdAt>4*60*60*1000 || !(await getTab(pair.tabId))) { delete s.pairs[pairId]; continue; }
     try {
       const result=await postJson(endpoint(pair.origin,"/events"),{pair_id:pairId,read_token:pair.readToken,after:pair.cursor||0});
-      if (!Array.isArray(result.events)) throw new Error("Ogiltigt svar från testservern.");
+      if (!Array.isArray(result.events)) throw new Error("Ogiltigt svar från signalservern.");
       for (const event of result.events) {
-        if (!Number.isSafeInteger(event.id) || event.id <= (pair.cursor||0) || !REMOTE_STATUSES.has(event.lage)) throw new Error("Ogiltig händelse från testservern.");
+        if (!Number.isSafeInteger(event.id) || event.id <= (pair.cursor||0) || !REMOTE_STATUSES.has(event.lage)) throw new Error("Ogiltig händelse från signalservern.");
         const jobId=await createJobInState(s,pair.tabId,"plugin",pairId,event.lage);
         pair.cursor=event.id;
         s.lastRemoteSignal={pairId,tabId:pair.tabId,jobId,lage:event.lage,at:Date.now()};

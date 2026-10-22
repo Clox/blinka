@@ -6,26 +6,30 @@ const STATUS_LABELS = {
   avbruten: "Avbrutet",
   fel: "Fel",
 };
+const DEFAULT_ENDPOINT = "https://blinka-signal.blinka-signal-worker.workers.dev";
 let activeTab;
 async function send(message) { const response = await chrome.runtime.sendMessage(message); if (!response?.ok) throw new Error(response?.error || "Okänt fel"); return response; }
 async function refresh() {
   const [tab] = await chrome.tabs.query({active:true,currentWindow:true}); activeTab=tab;
-  const savedEndpoint=await chrome.storage.local.get("blinkaEndpoint");
-  if (savedEndpoint.blinkaEndpoint && !$('endpoint').value) $('endpoint').value=savedEndpoint.blinkaEndpoint;
+  if (!$('endpoint').value) $('endpoint').value=DEFAULT_ENDPOINT;
   $("tab").textContent = tab?.id == null ? "Ingen aktiv flik" : `Flik ${tab.id} i fönster ${tab.windowId}`;
   $("add").disabled = tab?.id == null;
-  $("pair").disabled = tab?.id == null;
   const {state} = await send({type:"state"});
   $("pairs").replaceChildren();
   const pairs=Object.values(state.pairs||{}).filter(p=>p.tabId===tab?.id);
+  $("pair").disabled = tab?.id == null || pairs.length>0;
+  $("pair").textContent = pairs.length ? "Fliken är parad" : "Para denna flik";
+  $("pairHint").textContent = pairs.length && pairs.some(p=>p.origin!==DEFAULT_ENDPOINT)
+    ? "Den här fliken har en äldre eller egen parning. Avsluta den innan du parar mot Blinka signal."
+    : "";
   for (const pair of pairs) {
     const li=document.createElement("li"), id=document.createElement("span"), button=document.createElement("button"), stop=document.createElement("button");
     id.className="code"; id.textContent=pair.pairId;
-    button.textContent="Kopiera parnings-ID";
-    button.onclick=()=>run(async()=>{await navigator.clipboard.writeText(pair.pairId);});
+    button.textContent="Kopiera starttext";
+    button.onclick=()=>run(async()=>{await navigator.clipboard.writeText(`Mitt Blinka-parnings-ID är ${pair.pairId}. `);});
     stop.textContent="Avsluta parning";
     stop.onclick=()=>run(()=>send({type:"unpair",pairId:pair.pairId}));
-    li.append("Parnings-ID: ",id,document.createElement("br"),button,stop); $("pairs").append(li);
+    li.append(`Server: ${new URL(pair.origin).hostname}`,document.createElement("br"),"Parnings-ID: ",id,document.createElement("br"),button,stop); $("pairs").append(li);
   }
   if (!pairs.length) $("pairs").textContent="Ingen aktiv parning på denna flik.";
   const last=state.lastRemoteSignal;
@@ -62,8 +66,7 @@ $("pair").onclick=()=>run(async()=>{
   if (url.protocol!=="https:" || !url.hostname || url.username || url.password || url.search || url.hash || !["/","/mcp"].includes(url.pathname)) throw new Error("Ange serverns HTTPS-adress, eventuellt med /mcp.");
   const origin=url.origin;
   const granted=await chrome.permissions.request({origins:[`${origin}/*`]});
-  if (!granted) throw new Error("Blinka behöver tillåtelse att nå testservern.");
-  await chrome.storage.local.set({blinkaEndpoint:origin});
+  if (!granted) throw new Error("Blinka behöver tillåtelse att nå signalservern.");
   await send({type:"pair",tabId:activeTab.id,origin});
 });
 $("attention").onclick=()=>run(()=>send({type:"attention",windowId:activeTab.windowId}));

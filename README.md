@@ -1,6 +1,6 @@
 # Blinka – första tekniska provet
 
-Detta är ett fristående Manifest V3-tillägg för provning av en kvitterbar färgsignal. Version 0.4.1 kan ta emot flera **modellrapporterade lägen** från samma parning och visa dem som separata kvitterbara jobb. Det avläser fortfarande ingen oberoende eller garanterad ChatGPT-arbetsstatus.
+Detta är ett fristående Manifest V3-tillägg för provning av en kvitterbar färgsignal. Version 0.5.0 förifyller den verifierade gemensamma serveradressen och ger en färdig starttext för ChatGPTs sidopanel. Flera **modellrapporterade lägen** från samma parning visas som separata kvitterbara jobb. Blinka avläser fortfarande ingen oberoende eller garanterad ChatGPT-arbetsstatus.
 
 ## Ladda i Chrome
 
@@ -34,15 +34,15 @@ och [DRIFT.md](DRIFT.md). Använd en ofarlig testflik utan privata formulärdata
 De äldre provpluginerna pekar på stängda testtunnlar. Använd den nya privata
 pluginen **Blinka signal** när den är ansluten till den fasta adressen.
 
-1. Ladda om Blinka i `chrome://extensions` efter uppdateringen till version 0.4.1.
-2. Öppna Blinka-popupen på testfliken. Ange `https://blinka-signal.blinka-signal-worker.workers.dev` och klicka **Para denna flik**. Godkänn åtkomst till just den domänen när Chrome frågar.
-3. Popupen visar ett parnings-ID och knappen **Kopiera parnings-ID**. Öppna en ny ChatGPT-chatt i sidopanelen på samma testflik. Välj **Blinka signal** och skicka en enkel testuppgift med ID:t i samma meddelande, exempelvis `Mitt Blinka-parnings-ID är <ID>. Vad är 7 + 5?`
+1. Ladda om Blinka i `chrome://extensions` efter uppdateringen till version 0.5.0.
+2. Öppna Blinka-popupen på en ofarlig testflik och klicka **Para denna flik**. Den gemensamma serveradressen är förifylld. Godkänn åtkomst till just den domänen när Chrome frågar. Om fliken redan har en äldre parning, välj först **Avsluta parning**; väntande jobb kvitteras separat.
+3. Klicka **Kopiera starttext**. Öppna en ny ChatGPT-chatt i sidopanelen på samma testflik. Välj **Blinka signal**, klistra in starttexten och skriv din uppgift efter den, exempelvis `Vad är 7 + 5?`.
 4. Vänta upp till ungefär en minut; MV3-alarm körs tidigast var 30:e sekund och kan fördröjas. Du behöver inte byta flik.
 5. Kontrollera att endast den parade testflikens grupp får färgsignal. Blinka-popupen ska visa ett väntande **MCP**-jobb med modellens rapporterade läge. Klicka **Kvittera**; gruppens färg ska återställas.
 
 Parningen lagras med `tabId`, lästoken och läsposition i Blinkas lokala tilläggslagring. ChatGPT får endast parnings-ID:t. Servern lämnar ut händelser bara till den som har lästokenet. En parning kan ge flera jobb och går ut efter fyra timmar; **Avsluta parning** stoppar nya signaler utan att kvittera redan väntande jobb. Den gemensamma servern är fortfarande en prototyp utan användarkonton eller fullständigt missbruksskydd; använd den inte för privata formulärjobb.
 
-Blinka 0.4.1 accepterar en valfri HTTPS-serveradress. Värdtillståndet är valfritt i manifestet; Chrome ber bara om åtkomst till den **exakta adress** som du anger när du klickar **Para denna flik**. Det gör en framtida fast adress möjlig utan kodändring. Servern och ChatGPT-pluginen måste peka på samma adress.
+Blinka 0.5.0 använder den gemensamma servern som standard. **Annan signalserver** i popupen tillåter fortfarande en valfri HTTPS-adress för utvecklingsprov. Värdtillståndet är valfritt i manifestet; Chrome ber bara om åtkomst till den **exakta adress** som används när du klickar **Para denna flik**. Servern och ChatGPT-pluginen måste peka på samma adress. En aktiv parning per flik förenklar kopplingen; avsluta den innan du skapar en ny.
 
 **Flera turer i samma chatt:** Ge parnings-ID:t i första meddelandet och välj **Blinka signal**. Pluginens instruktion ber modellen återanvända ID:t före senare svar i *samma* chatt när kopplingen är tydlig. Detta är ännu inte verifierat i sidopanelen. Använd en ny parning om du byter chatt eller formulärflik; modellen kan glömma ID:t eller missa att anropa verktyget.
 

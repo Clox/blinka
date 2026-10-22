@@ -49,9 +49,10 @@ för den nya testservern.
 1. Kvittera det aktuella testjobbet i Blinka om det ännu väntar. Tidigare prov
    har verifierat återställning av gruppfärg efter kvittering; det har inte
    rapporterats för just denna nya parning.
-2. Gå vidare till en liten användbar pilot: förifyll den fasta serveradressen
-   i Blinka och förenkla parningsflödet. Behåll tydlig märkning om att statusen
-   kommer från modellens verktygsanrop och kan utebli.
+2. Blinka 0.5.0 förifyller serveradressen, tillåter en aktiv parning per flik
+   och kopierar en färdig starttext. Nästa utvecklingsbeslut är hur pluginen
+   ska distribueras till fler användare och hur en missad modellrapport ska
+   visas utan att tolkas som ett säkert avslut.
 
 ## Källor
 
