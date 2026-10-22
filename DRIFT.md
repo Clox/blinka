@@ -14,8 +14,13 @@ Ett externt HTTPS-prov verifierade `initialize`, `tools/list`, `signalera`,
 `/events` och `/unpair` mot den publicerade servern. Testparningen raderades.
 Lokala integrationstester verifierar dessutom att två parningar hålls
 åtskilda. Den privata ChatGPT-pluginen **Blinka signal** har registrerats
-mot `/mcp`, anslutits och visar `signalera` i sin verktygslista. Ett verkligt
-anrop från sidopanelen mot denna adress återstår.
+mot `/mcp`, anslutits och visar `signalera` i sin verktygslista. Den 23 oktober
+2026 provade användaren en ny parning från ChatGPTs sidopanel mot den fasta
+adressen: svaret blev `7 + 5 = 12` och den parade flikgruppen blev röd. Därmed
+är transporten från sidopanel till den gemensamma servern och Blinka verifierad
+för en modellrapporterad signal. Det exakta läget i Blinkas popup har inte
+rapporterats för denna parning. Detta prov säger ännu inget om
+signaler vid alla avslut, väntelägen eller fel.
 
 Den här servern är en pilot. Den lagrar endast slumpmässiga parnings-ID:n,
 hashade lästoken, lägen och tidsstämplar, inte konversationer eller
@@ -41,11 +46,12 @@ för den nya testservern.
 
 ## Nästa steg
 
-1. Ladda om Blinka 0.4.1 i Chrome. Para en ofarlig testflik mot
-   `https://blinka-signal.blinka-signal-worker.workers.dev`
-   utan `/mcp` och skicka ett parnings-ID i sidopanelen.
-2. Kontrollera att signalen når rätt flikgrupp och förblir tills den kvitteras.
-   Bedöm därefter om modellstyrd signal räcker för en första användbar pilot.
+1. Kvittera det aktuella testjobbet i Blinka om det ännu väntar. Tidigare prov
+   har verifierat återställning av gruppfärg efter kvittering; det har inte
+   rapporterats för just denna nya parning.
+2. Gå vidare till en liten användbar pilot: förifyll den fasta serveradressen
+   i Blinka och förenkla parningsflödet. Behåll tydlig märkning om att statusen
+   kommer från modellens verktygsanrop och kan utebli.
 
 ## Källor
 

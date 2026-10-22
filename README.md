@@ -24,8 +24,9 @@ Detta är ett fristående Manifest V3-tillägg för provning av en kvitterbar f�
 `https://blinka-signal.blinka-signal-worker.workers.dev` med MCP på `/mcp`.
 Externt HTTPS-prov har verifierat serverns MCP-verktyg, lagring och
 händelsehämtning. Den privata ChatGPT-pluginen **Blinka signal** är ansluten
-och visar verktyget `signalera`. Det återstår att verifiera en parning från
-sidopanelen mot just denna server. Se [signal-worker/README.md](signal-worker/README.md)
+och visar verktyget `signalera`. Den 23 oktober 2026 verifierade användaren
+ett sidopanelsprov mot den fasta adressen: ChatGPT svarade `7 + 5 = 12` och
+den parade gruppen blev röd. Se [signal-worker/README.md](signal-worker/README.md)
 och [DRIFT.md](DRIFT.md). Använd en ofarlig testflik utan privata formulärdata.
 
 **Resultat hittills:** Den riktiga Chrome-sidopanelen anropade verktyget med rätt parnings-ID och den parade gruppen bytte färg. I två senare prov, utan uttrycklig uppmaning att anropa verktyget, loggade servern `vantar_pa_svar` när modellen bad om mer information och `klar` när den löst en enkel uppgift. Gruppen växlade färg i båda fallen. Detta visar att modellstyrd signalering kan fungera för båda lägena, men inte att den sker vid varje avslut eller vänteläge.

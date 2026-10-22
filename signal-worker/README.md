@@ -71,8 +71,10 @@ Servern är publicerad på
 HTTPS-prov har verifierat MCP `initialize`, verktygslistan, `signalera`, D1:s
 händelsehämtning och borttagning av testparningen. ChatGPT har dessutom
 registrerat den privata pluginen **Blinka signal** mot `/mcp` och visat
-verktyget `signalera`. Det återstår att prova ett riktigt verktygsanrop i
-sidopanelen mot just denna adress.
+verktyget `signalera`. Den 23 oktober 2026 rapporterade användaren att ett
+enkelt `7 + 5`-prov från ChatGPTs sidopanel gav svar och gjorde den parade
+flikgruppen röd. Det verifierar en lyckad signaltransport för detta prov,
+inte en garanterad signal vid varje körning.
 
 Ange `https://blinka-signal.blinka-signal-worker.workers.dev` i Blinkas
 popup. Den privata ChatGPT-pluginen måste använda adressen ovan med `/mcp`.
