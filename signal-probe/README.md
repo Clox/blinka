@@ -15,7 +15,7 @@ npm start
 MCP-adressen blir `http://127.0.0.1:8787/mcp`. Servern lyssnar endast lokalt.
 Ett lokalt anrop har verifierat att `signalera` finns och ger ett kvitto.
 
-## Sidopanelprov som återstår
+## Sidopanelprovet den 22 oktober 2026
 
 För att ChatGPT ska nå servern krävs en separat, tillfällig HTTPS-anslutning
 och registrering som **custom MCP server** i ChatGPT Plugins. Vid provet den
@@ -26,14 +26,11 @@ verktygsregistreringen kontrollerades. Tunneladressen är tillfällig och ska
 inte sparas här. Använd bara påhittade test-ID:n; servern saknar
 användarautentisering och är inte byggd för verkliga jobb eller bestående drift.
 
-När servern är nåbar, registrera `https://<testadress>/mcp` via ChatGPT Plugins,
-installera den skapade pluginen och öppna en **ny sidopanelschatt**. Välj pluginen
-med `@` om den syns och skriv: ”Anropa Blinka-verktyget `signalera` med
-`probe_id` `panel-prov-1`. Detta är bara ett transportprov.” Kontrollera att
-serverns terminal visar samma ID. Prova sedan samma sak efter byte till en
-annan vanlig Chrome-flik, utan att ändra vilken formulärflik som jobbet avser.
+I en **ny sidopanelschatt** valde användaren `@Blinka transportprov` och bad
+om `signalera` med `probe_id` `panel-prov-1`. Sidopanelen visade serverns kvitto
+och serverloggen innehöll samma ID. Det verifierar ett explicit MCP-anrop från
+just Chrome-sidopanelen. Den tillfälliga tunneln har därefter stängts.
 
-Ett lyckat test verifierar att ett explicit MCP-anrop från sidopanelen når
-servern. Det verifierar ännu inte att modellen automatiskt anropar verktyget
+Det verifierar ännu inte att modellen automatiskt anropar verktyget
 vid avslut, väntan eller fel, eller att Blinka kan koppla händelsen till rätt
 formulärflik. De frågorna kräver separata prov.
