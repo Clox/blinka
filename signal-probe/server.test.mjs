@@ -3,6 +3,9 @@ import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:net";
 import { once } from "node:events";
+import { mkdtempSync, rmSync, statSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
@@ -62,4 +65,39 @@ test("en parning levererar flera händelser utan dubbletter", async t => {
   assert.equal((await post(`${origin}/events`, { pair_id: pairId, read_token: randomUUID(), after: 0 })).status, 404);
   assert.equal((await post(`${origin}/unpair`, body)).status, 200);
   assert.equal((await post(`${origin}/events`, { ...body, after: 2 })).status, 404);
+});
+
+test("aktiv parning och händelse överlever serveromstart", async t => {
+  const directory = mkdtempSync(join(tmpdir(), "blinka-state-test-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const stateFile = join(directory, "pairs.json");
+  const port = await freePort();
+  const origin = `http://127.0.0.1:${port}`;
+  async function start() {
+    const child = spawn(process.execPath, [new URL("./server.mjs", import.meta.url).pathname], {
+      env: { ...process.env, PORT: String(port), BLINKA_STATE_FILE: stateFile },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    for (let attempt = 0; attempt < 50; attempt++) {
+      try { if ((await fetch(`${origin}/events`)).status === 404) return child; } catch {}
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+    child.kill();
+    throw new Error("servern startade inte");
+  }
+  let server = await start();
+  t.after(() => server.kill());
+  const pairId = randomUUID(), readToken = randomUUID();
+  const body = { pair_id: pairId, read_token: readToken };
+  assert.equal((await post(`${origin}/pair`, body)).status, 200);
+  const client = new Client({ name: "blinka-restart-test", version: "1.0.0" });
+  await client.connect(new StreamableHTTPClientTransport(new URL(`${origin}/mcp`)));
+  assert.equal((await client.callTool({ name: "signalera", arguments: { probe_id: pairId, lage: "klar" } })).isError, undefined);
+  await client.close();
+  assert.equal(statSync(stateFile).mode & 0o777, 0o600);
+  server.kill();
+  await once(server, "exit");
+  server = await start();
+  assert.deepEqual((await post(`${origin}/events`, { ...body, after: 0 })).body.events.map(e => [e.id, e.lage]), [[1, "klar"]]);
+  assert.equal((await post(`${origin}/unpair`, body)).status, 200);
 });

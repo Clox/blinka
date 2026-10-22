@@ -7,7 +7,9 @@ parning kan signalera flera gånger under högst fyra timmar. `/unpair` avslutar
 parningen. Verktyget köar ett modellrapporterat läge för rätt ID, loggar ID,
 läge och tid och returnerar ett kvitto. Servern läser ingen konversation och
 vet inte vilken Chrome-flik ID:t hör till; den kopplingen finns endast i
-Blinkas lokala lagring. Servern lagrar parningar endast i minnet.
+Blinkas lokala lagring. Servern lagrar som standard parningar i minnet. Med
+`BLINKA_STATE_FILE` sparas de i en lokal fil med rättighet 0600 så att
+serveromstart inte förlorar en aktiv parning.
 
 ## Lokalt prov
 
@@ -17,6 +19,11 @@ npm install
 npm start
 npm test
 ```
+
+För att även behålla parningar mellan serverstarter, starta med exempelvis
+`BLINKA_STATE_FILE=/home/oscar/.local/state/blinka/pairs.json npm start`.
+Lagra inte filen i projektets Git-katalog. Den innehåller lästoken men inga
+ChatGPT-konversationer.
 
 MCP-adressen blir `http://127.0.0.1:8787/mcp`. Servern lyssnar endast lokalt.
 Ett lokalt anrop har verifierat att `signalera` finns och ger ett kvitto.
@@ -98,3 +105,8 @@ och kontrollerar att läspositionen hindrar dubbletter och att lästokenet kräv
 Pluginen **Blinka statusprov 3** har läst in den nya verktygsbeskrivningen för
 återanvändning av ID i samma chatt. Detta beteende är ännu inte testat i en
 verklig sidopanelschatt.
+
+Ett andra automatiskt prov startar om servern med `BLINKA_STATE_FILE` och
+verifierar att parning och köad händelse finns kvar samt att filen har
+rättighet 0600. Den tillfälliga testtjänsten måste få miljövariabeln
+uttryckligen för att använda detta; den nuvarande körningen gör inte det.
