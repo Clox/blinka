@@ -1,6 +1,6 @@
 # Blinka – första tekniska provet
 
-Detta är ett fristående Manifest V3-tillägg för provning av en kvitterbar färgsignal. Version 0.4.0 kan ta emot flera **modellrapporterade lägen** från samma parning och visa dem som separata kvitterbara jobb. Det avläser fortfarande ingen oberoende eller garanterad ChatGPT-arbetsstatus.
+Detta är ett fristående Manifest V3-tillägg för provning av en kvitterbar färgsignal. Version 0.4.1 kan ta emot flera **modellrapporterade lägen** från samma parning och visa dem som separata kvitterbara jobb. Det avläser fortfarande ingen oberoende eller garanterad ChatGPT-arbetsstatus.
 
 ## Ladda i Chrome
 
@@ -26,13 +26,15 @@ Detta prov kräver en tillfällig HTTPS-tunnel till `signal-probe/server.mjs` oc
 
 De äldre provpluginerna pekar på stängda testtunnlar. Det senaste provet använde **Blinka statusprov 3** och en tillfällig serveradress. Ändra testserverns HTTPS-adress i Blinka-popupen till pluginens aktuella adress innan **Para denna flik**. Adressen byts vid varje omstart av Quick Tunnel.
 
-1. Ladda om Blinka i `chrome://extensions` efter uppdateringen till version 0.4.0.
+1. Ladda om Blinka i `chrome://extensions` efter uppdateringen till version 0.4.1.
 2. Öppna Blinka-popupen på testfliken. Klistra in den aktuella testtunnelns HTTPS-adress (med eller utan `/mcp`) och klicka **Para denna flik**. Godkänn åtkomst till just testtunnelns domän när Chrome frågar.
 3. Popupen visar ett parnings-ID och knappen **Kopiera parnings-ID**. Öppna en ny ChatGPT-chatt i sidopanelen på samma testflik. Välj pluginen som är kopplad till den aktuella tunneln och skicka en enkel testuppgift med ID:t i samma meddelande, exempelvis `Mitt Blinka-parnings-ID är <ID>. Vad är 7 + 5?`
 4. Vänta upp till ungefär en minut; MV3-alarm körs tidigast var 30:e sekund och kan fördröjas. Du behöver inte byta flik.
 5. Kontrollera att endast den parade testflikens grupp får färgsignal. Blinka-popupen ska visa ett väntande **MCP**-jobb med modellens rapporterade läge. Klicka **Kvittera**; gruppens färg ska återställas.
 
 Parningen lagras med `tabId`, lästoken och läsposition i Blinkas lokala tilläggslagring. ChatGPT får endast parnings-ID:t. Servern lämnar ut händelser bara till den som har lästokenet. En parning kan ge flera jobb och går ut efter fyra timmar; **Avsluta parning** stoppar nya signaler utan att kvittera redan väntande jobb. Tunneln är ett tidsbegränsat test och saknar kontoautentisering; använd den inte för verkliga jobb.
+
+Blinka 0.4.1 accepterar en valfri HTTPS-serveradress. Värdtillståndet är valfritt i manifestet; Chrome ber bara om åtkomst till den **exakta adress** som du anger när du klickar **Para denna flik**. Det gör en framtida fast adress möjlig utan kodändring. Servern och ChatGPT-pluginen måste peka på samma adress.
 
 **Flera turer i samma chatt:** Ge parnings-ID:t i första meddelandet och välj **Blinka statusprov 3**. Pluginens instruktion ber modellen återanvända ID:t före senare svar i *samma* chatt när kopplingen är tydlig. Detta är ännu inte verifierat i sidopanelen. Använd en ny parning om du byter chatt eller formulärflik; modellen kan glömma ID:t eller missa att anropa verktyget.
 

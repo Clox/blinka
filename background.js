@@ -77,7 +77,7 @@ async function postJson(url,body) {
 }
 async function pair(tabId,origin) {
   const url=new URL(origin);
-  if (url.protocol!=="https:" || !url.hostname.endsWith(".trycloudflare.com") || url.pathname!=="/") throw new Error("Ange HTTPS-adressen till testtunneln.");
+  if (url.protocol!=="https:" || !url.hostname || url.username || url.password || url.pathname!=="/" || url.search || url.hash) throw new Error("Ange en HTTPS-adress utan sökväg eller inloggningsuppgifter.");
   if (!(await chrome.permissions.contains({origins:[`${url.origin}/*`]}))) throw new Error("Blinka saknar åtkomst till testtunneln.");
   const tab=await getTab(tabId); if (!tab) throw new Error("Fliken finns inte längre.");
   const s=await read(); s.pairs ||= {};

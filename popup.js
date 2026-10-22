@@ -59,7 +59,7 @@ async function run(fn) { $("error").textContent=""; try { await fn(); await refr
 $("add").onclick=()=>run(()=>send({type:"add",tabId:activeTab.id}));
 $("pair").onclick=()=>run(async()=>{
   const url=new URL($("endpoint").value);
-  if (url.protocol!=="https:" || !url.hostname.endsWith(".trycloudflare.com")) throw new Error("Ange testtunnelns HTTPS-adress.");
+  if (url.protocol!=="https:" || !url.hostname || url.username || url.password || url.search || url.hash || !["/","/mcp"].includes(url.pathname)) throw new Error("Ange serverns HTTPS-adress, eventuellt med /mcp.");
   const origin=url.origin;
   const granted=await chrome.permissions.request({origins:[`${origin}/*`]});
   if (!granted) throw new Error("Blinka behöver tillåtelse att nå testservern.");

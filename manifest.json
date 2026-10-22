@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
   "name": "Blinka",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Kvitterbar flikgruppssignal och modellrapporterat läge från ChatGPT.",
   "permissions": ["tabs", "tabGroups", "storage", "alarms", "windows"],
-  "optional_host_permissions": ["https://*.trycloudflare.com/*"],
+  "optional_host_permissions": ["https://*/*"],
   "background": {"service_worker": "background.js"},
   "action": {"default_title": "Blinka", "default_popup": "popup.html"},
   "content_scripts": [{
