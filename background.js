@@ -1,7 +1,10 @@
 const KEY = "blinkaFaviconV1";
 const LEGACY_KEY = "blinkaManualV1";
 const ALARM = "blinkaColorTick";
+const BLINK_MS = 1000;
 let queue = Promise.resolve();
+let blinkTimer = null;
+let blinkTickPending = false;
 function serial(fn) { const next=queue.then(fn); queue=next.catch(console.error); return next; }
 
 function chatgptFaviconBadge(url) {
@@ -41,8 +44,28 @@ async function read() {
 async function save(state) { await chrome.storage.local.set({[KEY]:state}); }
 async function getTab(id) { try { return await chrome.tabs.get(Number(id)); } catch { return null; } }
 async function getGroup(id) { try { return await chrome.tabGroups.get(Number(id)); } catch { return null; } }
+function syncBlinkTimer(state) {
+  const needsBlink=Object.keys(state.previews).length>0 && Object.values(state.groups).some(group=>!group.paused);
+  if (needsBlink && blinkTimer===null) blinkTimer=setInterval(blinkTick,BLINK_MS);
+  if (!needsBlink && blinkTimer!==null) { clearInterval(blinkTimer); blinkTimer=null; }
+}
+function blinkTick() {
+  if (blinkTickPending) return;
+  blinkTickPending=true;
+  serial(async()=>{
+    const state=await read();
+    await reconcile(state);
+    await paint(state);
+    await save(state);
+    syncBlinkTimer(state);
+    if (!Object.keys(state.previews).length) await chrome.alarms.clear(ALARM);
+  }).catch(console.error).finally(()=>{ blinkTickPending=false; });
+}
 async function setupAlarm(state) {
-  if (Object.keys(state.previews).length) await chrome.alarms.create(ALARM,{periodInMinutes:0.5});
+  syncBlinkTimer(state);
+  if (Object.keys(state.previews).length) {
+    if (!(await chrome.alarms.get(ALARM))) await chrome.alarms.create(ALARM,{periodInMinutes:0.5});
+  }
   else await chrome.alarms.clear(ALARM);
 }
 async function reconcile(state) {
@@ -135,6 +158,7 @@ async function resumeGroup(groupId) {
   record.paused=false;
   await paint(state);
   await save(state);
+  await setupAlarm(state);
   return state;
 }
 async function recordFavicon(tabId,url) {
@@ -204,8 +228,10 @@ chrome.tabGroups.onUpdated.addListener(group=>serial(async()=>{
     record.expected=current.color;
     record.paused=true;
     await save(state);
+    syncBlinkTimer(state);
   }
 }));
 chrome.tabGroups.onRemoved.addListener(()=>serial(()=>refreshState()));
 chrome.runtime.onInstalled.addListener(()=>serial(()=>refreshState()));
 chrome.runtime.onStartup.addListener(()=>serial(()=>refreshState()));
+serial(()=>refreshState()).catch(console.error);
