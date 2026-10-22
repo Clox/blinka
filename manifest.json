@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "Blinka",
+  "version": "0.1.0",
+  "description": "Manuellt prov av kvitterbar flikgruppssignal och sidopanelsåtkomst.",
+  "permissions": ["tabs", "tabGroups", "storage", "alarms", "windows"],
+  "background": {"service_worker": "background.js"},
+  "action": {"default_title": "Blinka", "default_popup": "popup.html"},
+  "content_scripts": [{
+    "matches": ["https://chatgpt.com/*"],
+    "all_frames": true,
+    "run_at": "document_idle",
+    "js": ["probe.js"]
+  }]
+}
