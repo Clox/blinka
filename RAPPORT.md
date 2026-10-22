@@ -39,3 +39,5 @@ För själva uppmärksamhetssignalen övervägdes även markering av Chrome-fön
 Med de undersökta tilläggs-API:erna finns **ingen verifierad, tillförlitlig automatisk signal** för att ChatGPTs sidopanel öppnats, väntar på användaren, är färdig eller har stannat med fel. Aktivitetspaus och flikgruppsfärg får inte tolkas som färdigstatus. Det manuella färgprovet kan användas separat.
 
 Nästa tekniska steg är ett avsett statusgränssnitt från ChatGPT-tillägget, eller en separat, uttryckligen avgränsad undersökning av andra åtkomstmetoder. Bevakning av vanliga ChatGPT-flikar ska utredas separat från sidopanelen. Fulla källbelägg, instruktioner och begränsningar finns i [UNDERSOKNING.md](UNDERSOKNING.md) och [README.md](README.md).
+
+En fortsatt granskning av automatiska hooks och en möjlig ChatGPT-plugin finns i [HOOKS_OCH_PLUGIN.md](HOOKS_OCH_PLUGIN.md). Den fann inget verifierat hookstöd för Chrome-sidopanelen. Ett modellstyrt pluginverktyg är ett möjligt experiment, men tillgänglighet i just sidopanelen och vägen tillbaka till Blinka återstår att prova.
