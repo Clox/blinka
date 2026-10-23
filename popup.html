@@ -10,11 +10,15 @@
   #error{color:#a21d1d;white-space:pre-wrap}
 </style>
 <h1>Blinka</h1>
-<p class="muted">Blinka signalerar när ChatGPT slutar styra en grupperad flik som du inte ser. En synlig flik ger normalt ingen signal.</p>
+<p class="muted">Blinka signalerar när ChatGPT slutar arbeta på en grupperad flik som du inte ser. En synlig flik ger normalt ingen signal.</p>
 <p id="tab"></p>
-<h2>Agentaktivitet</h2>
+<h2>Bevakning</h2>
+<label><input type="checkbox" id="sidePanelEnabled"> ChatGPTs sidopanel på webbsidor</label><br>
+<label><input type="checkbox" id="chatTabsEnabled"> Vanliga ChatGPT-flikar</label>
+<p class="muted">Vanliga ChatGPT-flikar kräver åtkomst till chatgpt.com. Blinka läser bara om knappen Stoppa finns, inte chattens innehåll.</p>
+<h2>Aktivitetsprov</h2>
 <p id="faviconProbe"></p>
-<p class="muted">Märket kan också försvinna vid avbrott eller när ChatGPT släpper fliken. Kontrollera resultatet i sidopanelen.</p>
+<p id="faviconNote" class="muted"></p>
 <h2>Uppmärksamhetssignal</h2>
 <p class="muted">Testknappen förbereder en färgsignal. Den startar när du lämnar fliken och slutar när du väljer tillbaka den.</p>
 <button id="preview">Förbered manuell testsignal</button>

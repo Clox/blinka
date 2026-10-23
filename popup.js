@@ -6,18 +6,28 @@ async function send(message) {
 }
 async function run(fn) {
   $("error").textContent="";
-  try { await fn(); await refresh(); }
+  try { await fn(); }
   catch(error) { $("error").textContent=error.message; }
+  await refresh().catch(error=>$("error").textContent=error.message);
 }
 async function refresh() {
   const [tab]=await chrome.tabs.query({active:true,currentWindow:true});
   $("tab").textContent=tab?.id == null ? "Ingen aktiv flik" : `Flik ${tab.id}`;
-  const {state}=await send({type:"state"});
+  const {state,settings}=await send({type:"state"});
+  $("sidePanelEnabled").checked=settings.sidePanelEnabled;
+  $("chatTabsEnabled").checked=settings.chatTabsEnabled;
   const favicon=state.tabs[tab?.id];
   const names={active:"aktiv",deliverable:"resultat",handoff:"överlämning"};
-  $("faviconProbe").textContent=!favicon?.lastBadge
-    ? "Ingen ChatGPT-markör observerad på den här fliken."
-    : `Nu: ${names[favicon.current] || "ingen"}. Senast: ${names[favicon.lastBadge]} ${new Date(favicon.lastBadgeAt).toLocaleTimeString()}.`;
+  const chatTab=tab?.url?.startsWith("https://chatgpt.com/");
+  $("faviconProbe").textContent=chatTab
+    ? !settings.chatTabsEnabled ? "Bevakning av vanliga ChatGPT-flikar är avstängd."
+      : state.chatRuns?.[tab.id] ? "Stoppa-knappen observerad: körning pågår eller avslutas." : "Ingen pågående körning observerad på den här fliken."
+    : !favicon?.lastBadge
+      ? "Ingen ChatGPT-markör observerad på den här fliken."
+      : `Nu: ${names[favicon.current] || "ingen"}. Senast: ${names[favicon.lastBadge]} ${new Date(favicon.lastBadgeAt).toLocaleTimeString()}.`;
+  $("faviconNote").textContent=chatTab
+    ? "När Stoppa försvinner kan tråden behöva kontrolleras. Det bevisar inte att svaret är färdigt."
+    : "Märket kan också försvinna vid avbrott eller när ChatGPT släpper fliken. Kontrollera resultatet i sidopanelen.";
   const jobs=Object.values(state.previews).filter(item=>item.tabId===tab?.id);
   const manual=jobs.find(item=>item.source!=="favicon");
   const armed=Boolean(state.testArmed?.[tab?.id]);
@@ -39,4 +49,13 @@ async function refresh() {
     $("previewControls").append(resume);
   }
 }
+$("sidePanelEnabled").onchange=()=>run(()=>send({type:"setSetting",key:"sidePanelEnabled",value:$("sidePanelEnabled").checked}));
+$("chatTabsEnabled").onchange=()=>run(async()=>{
+  const value=$("chatTabsEnabled").checked;
+  if (value) {
+    const granted=await chrome.permissions.request({origins:["https://chatgpt.com/*"]});
+    if (!granted) throw new Error("Åtkomst till chatgpt.com nekades.");
+  }
+  await send({type:"setSetting",key:"chatTabsEnabled",value});
+});
 refresh().catch(error=>$("error").textContent=error.message);

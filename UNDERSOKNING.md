@@ -2,6 +2,14 @@
 
 Senast uppdaterad 2026-10-23. Aktiv Chrome-profil: `Default`. ChatGPT-tillägg: `hehggadaopoacecdllhhajmbjkdcmajg`, version `1.26.1020.11845` enligt profilens `Preferences`. Installationen har bara lästs, aldrig ändrats. Inga cookies, inloggningsuppgifter eller privata konversationer har lästs.
 
+## Vanliga ChatGPT-flikar (version 0.13.0)
+
+I en ny, separat testtråd på `chatgpt.com` visades en knapp med `aria-label="Stoppa"` medan svaret genererades och försvann efteråt. Detta observerades en gång vardera i Chat och Work i den aktuella Chrome-miljön. Det är en DOM-observation, inte ett officiellt statusgränssnitt. En försvunnen knapp kan även bero på avbrott, fel, navigering eller ändrat gränssnitt. Den kan inte ensam skilja `klar` från `väntar på användaren` eller `fel`.
+
+Blinkas nya, separat aktiverbara bevakning begär frivillig värdåtkomst till `https://chatgpt.com/*`. Ett isolerat innehållsskript i huvudramen observerar bara om **Stoppa** finns och skickar `start`, `försvann`, `återkom` och `slut` till Blinkas service worker. Ingen chatttext läses eller skickas. Service workern tar `tabId` från Chromes meddelandeavsändare, inte från sidans innehåll, och använder samma gruppblinkning och kvittering som sidopanelsignalen. Kortare försvinnanden under 900 ms ignoreras. Befintliga ChatGPT-flikar injiceras när användaren aktiverar bevakningen. Frivillig åtkomst behålls i Chrome om reglaget stängs av, men skriptet avregistreras och stoppas. Användaren kan återkalla åtkomsten i Chromes tilläggsinställningar.
+
+Koden är syntaktiskt kontrollerad men version 0.13.0 har ännu inte laddats och provats i användarens Chrome. Ett riktat praktiskt prov återstår. UI-markören kan ändras i framtida ChatGPT-versioner.
+
 ## Verifierat
 
 - Sidopanelen består av en tilläggssida som visar `chatgpt.com` i en inbäddad ram. Blinkas gamla innehållsskript nådde vanliga ChatGPT-flikar men gav ingen träff i sidopanelens iframe, trots att panelen var öppen. Det visar utebliven åtkomst i den provade konfigurationen, inte ett allmänt förbud. Iframe-proben är borttagen.

@@ -1,5 +1,8 @@
 const KEY = "blinkaFaviconV1";
 const LEGACY_KEY = "blinkaManualV1";
+const SETTINGS_KEY = "blinkaSettingsV1";
+const CHAT_SCRIPT_ID = "blinka-chatgpt-tab";
+const CHAT_ORIGIN = "https://chatgpt.com/*";
 const ALARM = "blinkaColorTick";
 const BLINK_MS = 1000;
 const GRACE_MS = 1000;
@@ -24,7 +27,36 @@ function normalize(state) {
   state.groups ||= {};
   state.grace ||= {};
   state.testArmed ||= {};
+  state.chatRuns ||= {};
   return state;
+}
+async function settings() {
+  const stored=await chrome.storage.local.get(SETTINGS_KEY);
+  return {sidePanelEnabled:true,chatTabsEnabled:false,...stored[SETTINGS_KEY]};
+}
+async function syncChatScript() {
+  const enabled=(await settings()).chatTabsEnabled;
+  const permitted=await chrome.permissions.contains({origins:[CHAT_ORIGIN]});
+  const registered=(await chrome.scripting.getRegisteredContentScripts({ids:[CHAT_SCRIPT_ID]})).length>0;
+  if (enabled && permitted && !registered) {
+    await chrome.scripting.registerContentScripts([{id:CHAT_SCRIPT_ID,matches:[CHAT_ORIGIN],js:["chatgpt-content.js"],runAt:"document_idle",persistAcrossSessions:true}]);
+  } else if ((!enabled || !permitted) && registered) {
+    await chrome.scripting.unregisterContentScripts({ids:[CHAT_SCRIPT_ID]});
+  }
+  if (enabled && permitted) {
+    const tabs=await chrome.tabs.query({url:CHAT_ORIGIN});
+    for (const tab of tabs) {
+      try { await chrome.scripting.executeScript({target:{tabId:tab.id},files:["chatgpt-content.js"]}); } catch { /* Fliken kan vara under omladdning. */ }
+    }
+  } else {
+    const tabs=await chrome.tabs.query({url:CHAT_ORIGIN});
+    for (const tab of tabs) {
+      try { await chrome.tabs.sendMessage(tab.id,{type:"stopChatMonitor"}); } catch { /* Ingen aktiv monitor. */ }
+    }
+  }
+}
+function isChatTab(url) {
+  try { return new URL(url).origin==="https://chatgpt.com"; } catch { return false; }
 }
 async function read() {
   const stored=await chrome.storage.local.get([KEY,LEGACY_KEY]);
@@ -166,7 +198,7 @@ async function promoteOnLeaving(shouldPromote,at) {
     delete state.grace[id];
     changed=true;
     if (at>=candidate.at && at-candidate.at<GRACE_MS) {
-      await addAttention(state,Number(id),"favicon");
+      await addAttention(state,Number(id),candidate.source || "favicon");
     }
   }
   for (const [id,candidate] of Object.entries(state.testArmed)) {
@@ -192,6 +224,7 @@ async function resumeGroup(groupId) {
   return state;
 }
 async function recordFavicon(tabId,url,observedAt,observedTab,focusedAtEvent) {
+  if (!(await settings()).sidePanelEnabled || isChatTab(observedTab?.url)) return;
   const badge=chatgptFaviconBadge(url);
   const state=await read();
   const prior=state.tabs[tabId];
@@ -209,7 +242,7 @@ async function recordFavicon(tabId,url,observedAt,observedTab,focusedAtEvent) {
       const windowId=observedTab?.windowId ?? tab.windowId;
       const wasFocused=focusedAtEvent == null ? (await chrome.windows.get(windowId)).focused : await focusedAtEvent;
       if ((observedTab?.active ?? tab.active) && wasFocused) {
-        state.grace[tabId]={at:observedAt,windowId};
+        state.grace[tabId]={at:observedAt,windowId,source:"favicon"};
       } else {
         await addAttention(state,tabId,"favicon");
         await setupAlarm(state);
@@ -217,6 +250,62 @@ async function recordFavicon(tabId,url,observedAt,observedTab,focusedAtEvent) {
     }
   }
   await save(state);
+}
+async function recordChatRun(message,sender) {
+  if (!(await settings()).chatTabsEnabled || sender.frameId!==0 || !isChatTab(sender.url) || !sender.tab?.id) return;
+  const tabId=sender.tab.id;
+  const state=await read();
+  if (message.type==="chatRunStarted") {
+    if (typeof message.runId!=="string" || message.runId.length>100) return;
+    state.chatRuns[tabId]={runId:message.runId,at:Date.now()};
+    delete state.grace[tabId];
+    await save(state);
+    return;
+  }
+  const run=state.chatRuns[tabId];
+  if (!run || run.runId!==message.runId) return;
+  if (message.type==="chatRunResumed") {
+    delete run.disappeared;
+    await save(state);
+    return;
+  }
+  if (message.type==="chatRunDisappeared") {
+    const tab=await getTab(tabId);
+    if (!tab) return;
+    const focused=(await chrome.windows.get(tab.windowId)).focused;
+    run.disappeared={at:Date.now(),wasVisible:tab.active && focused,windowId:tab.windowId};
+    await save(state);
+    return;
+  }
+  const disappeared=run.disappeared;
+  if (!disappeared) return;
+  delete state.chatRuns[tabId];
+  const tab=await getTab(tabId);
+  if (tab?.groupId>=0) {
+    const focused=(await chrome.windows.get(tab.windowId)).focused;
+    const visible=tab.active && focused;
+    if (disappeared.wasVisible) {
+      if (visible) state.grace[tabId]={at:disappeared.at,windowId:tab.windowId,source:"chatgpt-tab"};
+      else if (disappeared.leftAt>=disappeared.at && disappeared.leftAt-disappeared.at<GRACE_MS) {
+        await addAttention(state,tabId,"chatgpt-tab"); await setupAlarm(state);
+      }
+    } else {
+      await addAttention(state,tabId,"chatgpt-tab"); await setupAlarm(state);
+    }
+  }
+  await save(state);
+}
+async function markChatLeaving(shouldMark,at) {
+  const state=await read();
+  let changed=false;
+  for (const [id,run] of Object.entries(state.chatRuns)) {
+    const candidate=run.disappeared;
+    if (candidate?.wasVisible && candidate.leftAt==null && shouldMark(Number(id),candidate)) {
+      candidate.leftAt=at;
+      changed=true;
+    }
+  }
+  if (changed) await save(state);
 }
 async function refreshState() {
   const state=await read();
@@ -226,10 +315,28 @@ async function refreshState() {
   return state;
 }
 
-chrome.runtime.onMessage.addListener((message,_sender,respond)=>{
-  if (!["state","preview","cancelPreview","resume"].includes(message?.type)) return false;
+chrome.runtime.onMessage.addListener((message,sender,respond)=>{
+  if (["chatRunStarted","chatRunDisappeared","chatRunResumed","chatRunEnded"].includes(message?.type)) {
+    serial(()=>recordChatRun(message,sender)).then(()=>respond({ok:true}),error=>respond({ok:false,error:String(error)}));
+    return true;
+  }
+  if (!["state","preview","cancelPreview","resume","settings","setSetting"].includes(message?.type) || sender.tab) return false;
   serial(async()=>{
-    if (message.type==="state") return {ok:true,state:await refreshState()};
+    if (message.type==="state") return {ok:true,state:await refreshState(),settings:await settings()};
+    if (message.type==="settings") return {ok:true,settings:await settings()};
+    if (message.type==="setSetting") {
+      if (!["sidePanelEnabled","chatTabsEnabled"].includes(message.key) || typeof message.value!=="boolean") throw new Error("Ogiltig inställning.");
+      if (message.key==="chatTabsEnabled" && message.value && !(await chrome.permissions.contains({origins:[CHAT_ORIGIN]}))) throw new Error("Ge först åtkomst till chatgpt.com.");
+      const next={...await settings(),[message.key]:message.value};
+      await chrome.storage.local.set({[SETTINGS_KEY]:next});
+      if (message.key==="chatTabsEnabled") {
+        const state=await read();
+        if (!message.value) state.chatRuns={};
+        await save(state);
+        await syncChatScript();
+      }
+      return {ok:true,settings:next};
+    }
     if (message.type==="preview") return {ok:true,state:await startPreview(message.tabId)};
     if (message.type==="cancelPreview") return {ok:true,state:await cancelPreview(message.tabId)};
     return {ok:true,state:await resumeGroup(message.groupId)};
@@ -247,9 +354,9 @@ chrome.alarms.onAlarm.addListener(alarm=>{
   });
 });
 chrome.tabs.onUpdated.addListener((tabId,change,tab)=>{
-  if (change.favIconUrl!==undefined) {
+  if (change.favIconUrl!==undefined && !isChatTab(tab?.url)) {
     const observedAt=Date.now();
-    const observedTab=tab && {active:tab.active,windowId:tab.windowId};
+    const observedTab=tab && {active:tab.active,windowId:tab.windowId,url:tab.url};
     const focusedAtEvent=observedTab?.windowId == null ? null
       : chrome.windows.get(observedTab.windowId).then(window=>window.focused,()=>false);
     serial(()=>recordFavicon(tabId,change.favIconUrl,observedAt,observedTab,focusedAtEvent));
@@ -259,6 +366,7 @@ chrome.tabs.onUpdated.addListener((tabId,change,tab)=>{
 chrome.tabs.onActivated.addListener(({tabId,windowId})=>{
   const activatedAt=Date.now();
   serial(async()=>{
+    await markChatLeaving((id,candidate)=>candidate.windowId===windowId && id!==tabId,activatedAt);
     await promoteOnLeaving((id,candidate)=>candidate.windowId===windowId && id!==tabId,activatedAt);
     await acknowledgeVisibleTab(tabId,windowId);
   });
@@ -266,6 +374,7 @@ chrome.tabs.onActivated.addListener(({tabId,windowId})=>{
 chrome.windows.onFocusChanged.addListener(windowId=>{
   const focusedAt=Date.now();
   serial(async()=>{
+    await markChatLeaving((_id,candidate)=>windowId===chrome.windows.WINDOW_ID_NONE || candidate.windowId!==windowId,focusedAt);
     await promoteOnLeaving((_id,candidate)=>windowId===chrome.windows.WINDOW_ID_NONE || candidate.windowId!==windowId,focusedAt);
     if (windowId===chrome.windows.WINDOW_ID_NONE) return;
     const [tab]=await chrome.tabs.query({active:true,windowId});
@@ -277,6 +386,7 @@ chrome.tabs.onRemoved.addListener(tabId=>serial(async()=>{
   delete state.tabs[tabId];
   delete state.grace[tabId];
   delete state.testArmed[tabId];
+  delete state.chatRuns[tabId];
   await reconcile(state);
   await save(state);
   await setupAlarm(state);
@@ -296,6 +406,16 @@ chrome.tabGroups.onUpdated.addListener(group=>serial(async()=>{
   }
 }));
 chrome.tabGroups.onRemoved.addListener(()=>serial(()=>refreshState()));
-chrome.runtime.onInstalled.addListener(()=>serial(()=>refreshState()));
-chrome.runtime.onStartup.addListener(()=>serial(()=>refreshState()));
-serial(()=>refreshState()).catch(console.error);
+chrome.permissions.onRemoved.addListener(()=>serial(async()=>{
+  if (!(await chrome.permissions.contains({origins:[CHAT_ORIGIN]}))) {
+    const next={...await settings(),chatTabsEnabled:false};
+    await chrome.storage.local.set({[SETTINGS_KEY]:next});
+    const state=await read();
+    state.chatRuns={};
+    await save(state);
+    await syncChatScript();
+  }
+}));
+chrome.runtime.onInstalled.addListener(()=>serial(async()=>{ await refreshState(); await syncChatScript(); }));
+chrome.runtime.onStartup.addListener(()=>serial(async()=>{ await refreshState(); await syncChatScript(); }));
+serial(async()=>{ await refreshState(); await syncChatScript(); }).catch(console.error);
