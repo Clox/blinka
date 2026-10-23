@@ -140,14 +140,24 @@ async function startPreview(tabId) {
   await setupAlarm(state);
   return state;
 }
-async function ackPreview(id) {
+async function acknowledgeTab(tabId) {
   const state=await read();
-  if (!state.previews[id]) throw new Error("Förhandsvisningen finns inte längre.");
-  delete state.previews[id];
+  let changed=false;
+  for (const [id,job] of Object.entries(state.previews)) {
+    if (job.tabId!==tabId) continue;
+    delete state.previews[id];
+    changed=true;
+  }
+  if (!changed) return;
   await reconcile(state);
   await save(state);
   await setupAlarm(state);
-  return state;
+}
+async function acknowledgeVisibleTab(tabId,windowId) {
+  const window=await chrome.windows.get(windowId);
+  if (!window.focused) return;
+  const tab=await getTab(tabId);
+  if (tab?.windowId===windowId) await acknowledgeTab(tabId);
 }
 async function resumeGroup(groupId) {
   const state=await read();
@@ -187,11 +197,10 @@ async function refreshState() {
 }
 
 chrome.runtime.onMessage.addListener((message,_sender,respond)=>{
-  if (!["state","preview","ack","resume"].includes(message?.type)) return false;
+  if (!["state","preview","resume"].includes(message?.type)) return false;
   serial(async()=>{
     if (message.type==="state") return {ok:true,state:await refreshState()};
     if (message.type==="preview") return {ok:true,state:await startPreview(message.tabId)};
-    if (message.type==="ack") return {ok:true,state:await ackPreview(message.id)};
     return {ok:true,state:await resumeGroup(message.groupId)};
   }).then(respond,error=>respond({ok:false,error:String(error?.message || error)}));
   return true;
@@ -209,6 +218,14 @@ chrome.alarms.onAlarm.addListener(alarm=>{
 chrome.tabs.onUpdated.addListener((tabId,change)=>{
   if (change.favIconUrl!==undefined) serial(()=>recordFavicon(tabId,change.favIconUrl));
   if (change.groupId!==undefined) serial(()=>refreshState());
+});
+chrome.tabs.onActivated.addListener(({tabId,windowId})=>serial(()=>acknowledgeVisibleTab(tabId,windowId)));
+chrome.windows.onFocusChanged.addListener(windowId=>{
+  if (windowId===chrome.windows.WINDOW_ID_NONE) return;
+  serial(async()=>{
+    const [tab]=await chrome.tabs.query({active:true,windowId});
+    if (tab) await acknowledgeVisibleTab(tab.id,windowId);
+  });
 });
 chrome.tabs.onRemoved.addListener(tabId=>serial(async()=>{
   const state=await read();
