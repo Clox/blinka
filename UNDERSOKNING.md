@@ -12,6 +12,8 @@ I version 0.14.0 infördes automatisk gruppskapning först när en grupplös fli
 
 Användaren observerade i en äldre delad Blinka-grupp att färgväxlingen fortsatte trots att båda flikarna hade besökts. Färgväxlingen upphörde när popupen öppnades; det tyder på att dess tillståndskontroll kvitterade en kvarvarande signal, men den exakta orsaken är inte verifierad. Version 0.17.0 gör därför en omkontroll 250 ms efter flikaktivering eller fönsterfokus och lägger till en återkommande synlighetskontroll: en väntande signal tas bort om dess flik är aktiv i ett fokuserat Chrome-fönster. Popupen visar antal väntande signaler och flik-ID:n i den aktuella gruppen.
 
+Version 0.18.0 lagrar två valda Chrome-gruppfärger och ett intervall per färg (500–3000 ms i steg om 250 ms). Standardvärdena är röd, gul och 1000 ms. Inställningarna gäller alla Blinka-signaler, även redan pågående signaler. En ny färgkombination målas direkt; en ny hastighet startar om den aktiva intervalltimern. Ursprunglig gruppfärg sparas separat och återställs vid kvittering om ingen annan har ändrat färgen. Chrome stöder bara nio fasta gruppfärger. Bakgrundsprocessens intervalltimer kan avbrytas av MV3-livscykeln; det befintliga 30-sekundersalarmet återupptar den vid behov. Därför är vald hastighet en måltakt, inte en tidsmässig garanti.
+
 ## Verifierat
 
 - Sidopanelen består av en tilläggssida som visar `chatgpt.com` i en inbäddad ram. Blinkas gamla innehållsskript nådde vanliga ChatGPT-flikar men gav ingen träff i sidopanelens iframe, trots att panelen var öppen. Det visar utebliven åtkomst i den provade konfigurationen, inte ett allmänt förbud. Iframe-proben är borttagen.

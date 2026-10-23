@@ -4,10 +4,11 @@ const SETTINGS_KEY = "blinkaSettingsV1";
 const CHAT_SCRIPT_ID = "blinka-chatgpt-tab";
 const CHAT_ORIGIN = "https://chatgpt.com/*";
 const ALARM = "blinkaColorTick";
-const BLINK_MS = 1000;
+const GROUP_COLORS = ["grey","blue","red","yellow","green","pink","purple","cyan","orange"];
 const GRACE_MS = 1000;
 let queue = Promise.resolve();
 let blinkTimer = null;
+let blinkTimerPeriod = null;
 let blinkTickPending = false;
 function serial(fn) { const next=queue.then(fn); queue=next.catch(console.error); return next; }
 
@@ -37,7 +38,7 @@ function normalize(state) {
 }
 async function settings() {
   const stored=await chrome.storage.local.get(SETTINGS_KEY);
-  return {sidePanelEnabled:true,chatTabsEnabled:false,...stored[SETTINGS_KEY]};
+  return {sidePanelEnabled:true,chatTabsEnabled:false,blinkColorA:"red",blinkColorB:"yellow",blinkIntervalMs:1000,...stored[SETTINGS_KEY]};
 }
 async function syncChatScript() {
   const enabled=(await settings()).chatTabsEnabled;
@@ -83,10 +84,18 @@ async function read() {
 async function save(state) { await chrome.storage.local.set({[KEY]:state}); }
 async function getTab(id) { try { return await chrome.tabs.get(Number(id)); } catch { return null; } }
 async function getGroup(id) { try { return await chrome.tabGroups.get(Number(id)); } catch { return null; } }
-function syncBlinkTimer(state) {
+async function syncBlinkTimer(state) {
   const needsBlink=Object.keys(state.previews).length>0 && Object.values(state.groups).some(group=>!group.paused);
-  if (needsBlink && blinkTimer===null) blinkTimer=setInterval(blinkTick,BLINK_MS);
-  if (!needsBlink && blinkTimer!==null) { clearInterval(blinkTimer); blinkTimer=null; }
+  const period=needsBlink ? (await settings()).blinkIntervalMs : null;
+  if (blinkTimer!==null && (!needsBlink || blinkTimerPeriod!==period)) {
+    clearInterval(blinkTimer);
+    blinkTimer=null;
+    blinkTimerPeriod=null;
+  }
+  if (needsBlink && blinkTimer===null) {
+    blinkTimer=setInterval(blinkTick,period);
+    blinkTimerPeriod=period;
+  }
 }
 function blinkTick() {
   if (blinkTickPending) return;
@@ -96,12 +105,12 @@ function blinkTick() {
     await reconcile(state);
     await paint(state);
     await save(state);
-    syncBlinkTimer(state);
+    await syncBlinkTimer(state);
     if (!Object.keys(state.previews).length) await chrome.alarms.clear(ALARM);
   }).catch(console.error).finally(()=>{ blinkTickPending=false; });
 }
 async function setupAlarm(state) {
-  syncBlinkTimer(state);
+  await syncBlinkTimer(state);
   if (Object.keys(state.previews).length) {
     if (!(await chrome.alarms.get(ALARM))) await chrome.alarms.create(ALARM,{periodInMinutes:0.5});
   }
@@ -144,6 +153,7 @@ async function reconcile(state) {
   }
 }
 async function paint(state) {
+  const {blinkColorA,blinkColorB}=await settings();
   for (const [id,record] of Object.entries(state.groups)) {
     if (record.paused) continue;
     const group=await getGroup(id);
@@ -154,7 +164,7 @@ async function paint(state) {
       record.paused=true;
       continue;
     }
-    const color=record.expected==="red" ? "yellow" : "red";
+    const color=record.expected===blinkColorA ? blinkColorB : blinkColorA;
     if (group.color!==color) {
       record.expected=color;
       await chrome.tabGroups.update(Number(id),{color});
@@ -375,12 +385,25 @@ chrome.runtime.onMessage.addListener((message,sender,respond)=>{
     serial(()=>recordChatRun(message,sender)).then(()=>respond({ok:true}),error=>respond({ok:false,error:String(error)}));
     return true;
   }
-  if (!["state","preview","cancelPreview","resume","settings","setSetting"].includes(message?.type) || sender.tab) return false;
+  if (!["state","preview","cancelPreview","resume","settings","setSetting","setBlinkColors"].includes(message?.type) || sender.tab) return false;
   serial(async()=>{
     if (message.type==="state") return {ok:true,state:await refreshState(),settings:await settings()};
     if (message.type==="settings") return {ok:true,settings:await settings()};
+    if (message.type==="setBlinkColors") {
+      if (!GROUP_COLORS.includes(message.colorA) || !GROUP_COLORS.includes(message.colorB) || message.colorA===message.colorB) throw new Error("Välj två olika tillåtna färger.");
+      const next={...await settings(),blinkColorA:message.colorA,blinkColorB:message.colorB};
+      await chrome.storage.local.set({[SETTINGS_KEY]:next});
+      const state=await read();
+      await reconcile(state);
+      await paint(state);
+      await save(state);
+      await setupAlarm(state);
+      return {ok:true,settings:next};
+    }
     if (message.type==="setSetting") {
-      if (!["sidePanelEnabled","chatTabsEnabled"].includes(message.key) || typeof message.value!=="boolean") throw new Error("Ogiltig inställning.");
+      const booleanKey=["sidePanelEnabled","chatTabsEnabled"].includes(message.key);
+      const speedKey=message.key==="blinkIntervalMs";
+      if (!(booleanKey && typeof message.value==="boolean") && !(speedKey && Number.isInteger(message.value) && message.value>=500 && message.value<=3000 && message.value%250===0)) throw new Error("Ogiltig inställning.");
       if (message.key==="chatTabsEnabled" && message.value && !(await chrome.permissions.contains({origins:[CHAT_ORIGIN]}))) throw new Error("Ge först åtkomst till chatgpt.com.");
       const next={...await settings(),[message.key]:message.value};
       await chrome.storage.local.set({[SETTINGS_KEY]:next});
@@ -390,6 +413,7 @@ chrome.runtime.onMessage.addListener((message,sender,respond)=>{
         await save(state);
         await syncChatScript();
       }
+      if (speedKey) await setupAlarm(await read());
       return {ok:true,settings:next};
     }
     if (message.type==="preview") return {ok:true,state:await startPreview(message.tabId)};
@@ -470,7 +494,7 @@ chrome.tabGroups.onUpdated.addListener(group=>serial(async()=>{
     record.expected=current.color;
     record.paused=true;
     await save(state);
-    syncBlinkTimer(state);
+    await syncBlinkTimer(state);
   }
 }));
 chrome.tabGroups.onRemoved.addListener(()=>serial(()=>refreshState()));

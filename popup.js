@@ -1,4 +1,6 @@
 const $ = id => document.getElementById(id);
+let currentBlinkColors={colorA:"red",colorB:"yellow"};
+function showSpeed(ms) { $("blinkSpeedValue").textContent=`${(ms/1000).toLocaleString("sv-SE")} s`; }
 async function send(message) {
   const response=await chrome.runtime.sendMessage(message);
   if (!response?.ok) throw new Error(response?.error || "Okänt fel");
@@ -16,6 +18,11 @@ async function refresh() {
   const {state,settings}=await send({type:"state"});
   $("sidePanelEnabled").checked=settings.sidePanelEnabled;
   $("chatTabsEnabled").checked=settings.chatTabsEnabled;
+  currentBlinkColors={colorA:settings.blinkColorA,colorB:settings.blinkColorB};
+  $("blinkColorA").value=settings.blinkColorA;
+  $("blinkColorB").value=settings.blinkColorB;
+  $("blinkSpeed").value=settings.blinkIntervalMs;
+  showSpeed(settings.blinkIntervalMs);
   const favicon=state.tabs[tab?.id];
   const names={active:"aktiv",deliverable:"resultat",handoff:"överlämning"};
   const chatTab=tab?.url?.startsWith("https://chatgpt.com/");
@@ -68,4 +75,16 @@ $("chatTabsEnabled").onchange=()=>run(async()=>{
   }
   await send({type:"setSetting",key:"chatTabsEnabled",value});
 });
+$("blinkColorA").onchange=()=>run(()=>{
+  const colorA=$("blinkColorA").value;
+  const colorB=colorA===$("blinkColorB").value ? currentBlinkColors.colorA : $("blinkColorB").value;
+  return send({type:"setBlinkColors",colorA,colorB});
+});
+$("blinkColorB").onchange=()=>run(()=>{
+  const colorB=$("blinkColorB").value;
+  const colorA=colorB===$("blinkColorA").value ? currentBlinkColors.colorB : $("blinkColorA").value;
+  return send({type:"setBlinkColors",colorA,colorB});
+});
+$("blinkSpeed").oninput=()=>showSpeed(Number($("blinkSpeed").value));
+$("blinkSpeed").onchange=()=>run(()=>send({type:"setSetting",key:"blinkIntervalMs",value:Number($("blinkSpeed").value)}));
 refresh().catch(error=>$("error").textContent=error.message);

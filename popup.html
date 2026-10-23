@@ -6,6 +6,9 @@
 <style>
   body{font:14px system-ui;width:330px;padding:12px;color:#182132}
   button{margin:4px 4px 4px 0;padding:7px}
+  .setting{display:block;margin:8px 0}
+  .setting select{margin-left:8px}
+  #blinkSpeed{vertical-align:middle;width:170px}
   .muted{color:#536070}
   #error{color:#a21d1d;white-space:pre-wrap}
 </style>
@@ -16,6 +19,19 @@
 <label><input type="checkbox" id="sidePanelEnabled"> ChatGPTs sidopanel på webbsidor</label><br>
 <label><input type="checkbox" id="chatTabsEnabled"> Vanliga ChatGPT-flikar</label>
 <p class="muted">Avstängt tills du slår på det här reglaget och godkänner åtkomst till chatgpt.com. Blinka läser bara om knappen Stoppa finns, inte chattens innehåll.</p>
+<h2>Blinkande grupp</h2>
+<label class="setting">Första färgen <select id="blinkColorA">
+  <option value="grey">Grå</option><option value="blue">Blå</option><option value="red">Röd</option>
+  <option value="yellow">Gul</option><option value="green">Grön</option><option value="pink">Rosa</option>
+  <option value="purple">Lila</option><option value="cyan">Turkos</option><option value="orange">Orange</option>
+</select></label>
+<label class="setting">Andra färgen <select id="blinkColorB">
+  <option value="grey">Grå</option><option value="blue">Blå</option><option value="red">Röd</option>
+  <option value="yellow">Gul</option><option value="green">Grön</option><option value="pink">Rosa</option>
+  <option value="purple">Lila</option><option value="cyan">Turkos</option><option value="orange">Orange</option>
+</select></label>
+<label class="setting">Tid per färg <input type="range" id="blinkSpeed" min="500" max="3000" step="250"> <output id="blinkSpeedValue"></output></label>
+<p class="muted">Valen gäller både sidopanelen och vanliga ChatGPT-flikar. Gruppens ursprungliga färg återställs när signalen kvitteras.</p>
 <h2>Aktivitetsprov</h2>
 <p id="faviconProbe"></p>
 <p id="faviconNote" class="muted"></p>
