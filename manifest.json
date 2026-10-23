@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Blinka",
-  "version": "0.18.0",
+  "version": "0.19.0",
   "description": "Flikgruppssignal för ChatGPTs sidopanel och vanliga ChatGPT-flikar.",
   "permissions": ["tabs", "tabGroups", "storage", "alarms", "scripting"],
   "optional_host_permissions": ["https://chatgpt.com/*"],

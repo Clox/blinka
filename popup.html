@@ -7,7 +7,21 @@
   body{font:14px system-ui;width:330px;padding:12px;color:#182132}
   button{margin:4px 4px 4px 0;padding:7px}
   .setting{display:block;margin:8px 0}
-  .setting select{margin-left:8px}
+  .color-choice{border:0;padding:0;margin:12px 0}
+  .color-choice legend{padding:0;margin-bottom:6px}
+  .palette{display:grid;grid-template-columns:repeat(9,30px);gap:5px}
+  .palette input{appearance:none;box-sizing:border-box;width:30px;height:30px;margin:0;border:1px solid #667085;border-radius:7px;cursor:pointer;background:var(--swatch)}
+  .palette input:checked{outline:3px solid #182132;outline-offset:2px}
+  .palette input:focus-visible{outline:3px solid #2563eb;outline-offset:2px}
+  .palette input[value="grey"]{--swatch:#9aa0a6}
+  .palette input[value="blue"]{--swatch:#4285f4}
+  .palette input[value="red"]{--swatch:#ea4335}
+  .palette input[value="yellow"]{--swatch:#fbbc04}
+  .palette input[value="green"]{--swatch:#34a853}
+  .palette input[value="pink"]{--swatch:#f06292}
+  .palette input[value="purple"]{--swatch:#a142f4}
+  .palette input[value="cyan"]{--swatch:#24c1e0}
+  .palette input[value="orange"]{--swatch:#f2993a}
   #blinkSpeed{vertical-align:middle;width:170px}
   .muted{color:#536070}
   #error{color:#a21d1d;white-space:pre-wrap}
@@ -20,17 +34,17 @@
 <label><input type="checkbox" id="chatTabsEnabled"> Vanliga ChatGPT-flikar</label>
 <p class="muted">Avstängt tills du slår på det här reglaget och godkänner åtkomst till chatgpt.com. Blinka läser bara om knappen Stoppa finns, inte chattens innehåll.</p>
 <h2>Blinkande grupp</h2>
-<label class="setting">Första färgen <select id="blinkColorA">
-  <option value="grey">Grå</option><option value="blue">Blå</option><option value="red">Röd</option>
-  <option value="yellow">Gul</option><option value="green">Grön</option><option value="pink">Rosa</option>
-  <option value="purple">Lila</option><option value="cyan">Turkos</option><option value="orange">Orange</option>
-</select></label>
-<label class="setting">Andra färgen <select id="blinkColorB">
-  <option value="grey">Grå</option><option value="blue">Blå</option><option value="red">Röd</option>
-  <option value="yellow">Gul</option><option value="green">Grön</option><option value="pink">Rosa</option>
-  <option value="purple">Lila</option><option value="cyan">Turkos</option><option value="orange">Orange</option>
-</select></label>
-<label class="setting">Tid per färg <input type="range" id="blinkSpeed" min="500" max="3000" step="250"> <output id="blinkSpeedValue"></output></label>
+<fieldset class="color-choice" id="blinkColorA"><legend>Första färgen</legend><div class="palette">
+  <input type="radio" name="blinkColorA" value="grey" aria-label="Grå" title="Grå"><input type="radio" name="blinkColorA" value="blue" aria-label="Blå" title="Blå"><input type="radio" name="blinkColorA" value="red" aria-label="Röd" title="Röd">
+  <input type="radio" name="blinkColorA" value="yellow" aria-label="Gul" title="Gul"><input type="radio" name="blinkColorA" value="green" aria-label="Grön" title="Grön"><input type="radio" name="blinkColorA" value="pink" aria-label="Rosa" title="Rosa">
+  <input type="radio" name="blinkColorA" value="purple" aria-label="Lila" title="Lila"><input type="radio" name="blinkColorA" value="cyan" aria-label="Turkos" title="Turkos"><input type="radio" name="blinkColorA" value="orange" aria-label="Orange" title="Orange">
+</div></fieldset>
+<fieldset class="color-choice" id="blinkColorB"><legend>Andra färgen</legend><div class="palette">
+  <input type="radio" name="blinkColorB" value="grey" aria-label="Grå" title="Grå"><input type="radio" name="blinkColorB" value="blue" aria-label="Blå" title="Blå"><input type="radio" name="blinkColorB" value="red" aria-label="Röd" title="Röd">
+  <input type="radio" name="blinkColorB" value="yellow" aria-label="Gul" title="Gul"><input type="radio" name="blinkColorB" value="green" aria-label="Grön" title="Grön"><input type="radio" name="blinkColorB" value="pink" aria-label="Rosa" title="Rosa">
+  <input type="radio" name="blinkColorB" value="purple" aria-label="Lila" title="Lila"><input type="radio" name="blinkColorB" value="cyan" aria-label="Turkos" title="Turkos"><input type="radio" name="blinkColorB" value="orange" aria-label="Orange" title="Orange">
+</div></fieldset>
+<label class="setting">Tid per färg <input type="range" id="blinkSpeed" min="500" max="3000" step="250" value="1000"> <output id="blinkSpeedValue">1 s</output></label>
 <p class="muted">Valen gäller både sidopanelen och vanliga ChatGPT-flikar. Gruppens ursprungliga färg återställs när signalen kvitteras.</p>
 <h2>Aktivitetsprov</h2>
 <p id="faviconProbe"></p>

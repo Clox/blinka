@@ -14,6 +14,8 @@ Användaren observerade i en äldre delad Blinka-grupp att färgväxlingen forts
 
 Version 0.18.0 lagrar två valda Chrome-gruppfärger och ett intervall per färg (500–3000 ms i steg om 250 ms). Standardvärdena är röd, gul och 1000 ms. Inställningarna gäller alla Blinka-signaler, även redan pågående signaler. En ny färgkombination målas direkt; en ny hastighet startar om den aktiva intervalltimern. Ursprunglig gruppfärg sparas separat och återställs vid kvittering om ingen annan har ändrat färgen. Chrome stöder bara nio fasta gruppfärger. Bakgrundsprocessens intervalltimer kan avbrytas av MV3-livscykeln; det befintliga 30-sekundersalarmet återupptar den vid behov. Därför är vald hastighet en måltakt, inte en tidsmässig garanti.
 
+Version 0.19.0 ersätter färgnamn som valkontroll med synliga färgrutor i popupen. Varje ruta har fortfarande ett tillgängligt namn för hjälpmedel och ett namn vid muspekaren. Färgproverna är ungefärliga eftersom Chromes tema kan ändra den faktiska gruppnyansen. Popupen ger hastighetsreglaget ett startvärde och ersätter saknade eller ogiltiga värden med 1000 ms, så att en blandning av gammal och ny popup/bakgrundsprocess vid omladdning inte visar `NaN s`. Lagringsformatet och signalhanteringen är oförändrade.
+
 ## Verifierat
 
 - Sidopanelen består av en tilläggssida som visar `chatgpt.com` i en inbäddad ram. Blinkas gamla innehållsskript nådde vanliga ChatGPT-flikar men gav ingen träff i sidopanelens iframe, trots att panelen var öppen. Det visar utebliven åtkomst i den provade konfigurationen, inte ett allmänt förbud. Iframe-proben är borttagen.

@@ -1,6 +1,12 @@
 const $ = id => document.getElementById(id);
 let currentBlinkColors={colorA:"red",colorB:"yellow"};
-function showSpeed(ms) { $("blinkSpeedValue").textContent=`${(ms/1000).toLocaleString("sv-SE")} s`; }
+function validSpeed(value) {
+  const ms=Number(value);
+  return Number.isInteger(ms) && ms>=500 && ms<=3000 && ms%250===0 ? ms : 1000;
+}
+function showSpeed(ms) { $("blinkSpeedValue").textContent=`${(validSpeed(ms)/1000).toLocaleString("sv-SE")} s`; }
+function selectedColor(name) { return document.querySelector(`input[name="${name}"]:checked`).value; }
+function showColor(name,color) { document.querySelector(`input[name="${name}"][value="${color}"]`).checked=true; }
 async function send(message) {
   const response=await chrome.runtime.sendMessage(message);
   if (!response?.ok) throw new Error(response?.error || "Okänt fel");
@@ -18,11 +24,12 @@ async function refresh() {
   const {state,settings}=await send({type:"state"});
   $("sidePanelEnabled").checked=settings.sidePanelEnabled;
   $("chatTabsEnabled").checked=settings.chatTabsEnabled;
-  currentBlinkColors={colorA:settings.blinkColorA,colorB:settings.blinkColorB};
-  $("blinkColorA").value=settings.blinkColorA;
-  $("blinkColorB").value=settings.blinkColorB;
-  $("blinkSpeed").value=settings.blinkIntervalMs;
-  showSpeed(settings.blinkIntervalMs);
+  currentBlinkColors={colorA:settings.blinkColorA || "red",colorB:settings.blinkColorB || "yellow"};
+  showColor("blinkColorA",currentBlinkColors.colorA);
+  showColor("blinkColorB",currentBlinkColors.colorB);
+  const speed=validSpeed(settings.blinkIntervalMs);
+  $("blinkSpeed").value=speed;
+  showSpeed(speed);
   const favicon=state.tabs[tab?.id];
   const names={active:"aktiv",deliverable:"resultat",handoff:"överlämning"};
   const chatTab=tab?.url?.startsWith("https://chatgpt.com/");
@@ -76,15 +83,20 @@ $("chatTabsEnabled").onchange=()=>run(async()=>{
   await send({type:"setSetting",key:"chatTabsEnabled",value});
 });
 $("blinkColorA").onchange=()=>run(()=>{
-  const colorA=$("blinkColorA").value;
-  const colorB=colorA===$("blinkColorB").value ? currentBlinkColors.colorA : $("blinkColorB").value;
+  const colorA=selectedColor("blinkColorA");
+  const colorB=colorA===selectedColor("blinkColorB") ? currentBlinkColors.colorA : selectedColor("blinkColorB");
   return send({type:"setBlinkColors",colorA,colorB});
 });
 $("blinkColorB").onchange=()=>run(()=>{
-  const colorB=$("blinkColorB").value;
-  const colorA=colorB===$("blinkColorA").value ? currentBlinkColors.colorB : $("blinkColorA").value;
+  const colorB=selectedColor("blinkColorB");
+  const colorA=colorB===selectedColor("blinkColorA") ? currentBlinkColors.colorB : selectedColor("blinkColorA");
   return send({type:"setBlinkColors",colorA,colorB});
 });
 $("blinkSpeed").oninput=()=>showSpeed(Number($("blinkSpeed").value));
-$("blinkSpeed").onchange=()=>run(()=>send({type:"setSetting",key:"blinkIntervalMs",value:Number($("blinkSpeed").value)}));
+$("blinkSpeed").onchange=()=>run(()=>{
+  const speed=validSpeed($("blinkSpeed").value);
+  $("blinkSpeed").value=speed;
+  showSpeed(speed);
+  return send({type:"setSetting",key:"blinkIntervalMs",value:speed});
+});
 refresh().catch(error=>$("error").textContent=error.message);

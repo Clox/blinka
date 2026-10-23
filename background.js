@@ -38,7 +38,13 @@ function normalize(state) {
 }
 async function settings() {
   const stored=await chrome.storage.local.get(SETTINGS_KEY);
-  return {sidePanelEnabled:true,chatTabsEnabled:false,blinkColorA:"red",blinkColorB:"yellow",blinkIntervalMs:1000,...stored[SETTINGS_KEY]};
+  const result={sidePanelEnabled:true,chatTabsEnabled:false,blinkColorA:"red",blinkColorB:"yellow",blinkIntervalMs:1000,...stored[SETTINGS_KEY]};
+  if (!GROUP_COLORS.includes(result.blinkColorA) || !GROUP_COLORS.includes(result.blinkColorB) || result.blinkColorA===result.blinkColorB) {
+    result.blinkColorA="red";
+    result.blinkColorB="yellow";
+  }
+  if (!Number.isInteger(result.blinkIntervalMs) || result.blinkIntervalMs<500 || result.blinkIntervalMs>3000 || result.blinkIntervalMs%250!==0) result.blinkIntervalMs=1000;
+  return result;
 }
 async function syncChatScript() {
   const enabled=(await settings()).chatTabsEnabled;
