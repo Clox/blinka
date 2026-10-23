@@ -20,13 +20,17 @@ async function refresh() {
     : `Nu: ${names[favicon.current] || "ingen"}. Senast: ${names[favicon.lastBadge]} ${new Date(favicon.lastBadgeAt).toLocaleTimeString()}.`;
   const jobs=Object.values(state.previews).filter(item=>item.tabId===tab?.id);
   const manual=jobs.find(item=>item.source!=="favicon");
-  $("preview").disabled=tab?.id == null || Boolean(manual);
-  $("preview").onclick=()=>run(()=>send({type:"preview",tabId:tab.id}));
+  const armed=Boolean(state.testArmed?.[tab?.id]);
+  $("preview").disabled=tab?.id == null || tab.groupId<0 || Boolean(manual);
+  $("preview").textContent=armed ? "Avbryt testsignal" : "Förbered manuell testsignal";
+  $("preview").onclick=()=>run(()=>send({type:armed ? "cancelPreview" : "preview",tabId:tab.id}));
   $("previewControls").replaceChildren();
   const groupId=jobs.find(item=>item.groupId>=0)?.groupId;
   const group=groupId == null ? null : state.groups[groupId];
   $("previewStatus").textContent=jobs.length
     ? group?.paused ? "Färgväxlingen pausades efter en annan färgändring." : group ? "Den här fliken har en väntande signal. Välj en annan flik och kom tillbaka för att kvittera." : "Fliken har lämnat den signalerande gruppen."
+    : armed ? "Testsignalen startar när du lämnar fliken. Välj tillbaka för att stoppa den."
+    : tab?.groupId<0 ? "Fliken saknar grupp. Blinka skapar ingen grupp automatiskt."
     : "Ingen väntande signal på denna flik.";
   if (group?.paused) {
     const resume=document.createElement("button");

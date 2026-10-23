@@ -2,6 +2,7 @@ const KEY = "blinkaFaviconV1";
 const LEGACY_KEY = "blinkaManualV1";
 const ALARM = "blinkaColorTick";
 const BLINK_MS = 1000;
+const GRACE_MS = 1000;
 let queue = Promise.resolve();
 let blinkTimer = null;
 let blinkTickPending = false;
@@ -21,7 +22,8 @@ function normalize(state) {
   state.tabs ||= {};
   state.previews ||= {};
   state.groups ||= {};
-  state.owned ||= {};
+  state.grace ||= {};
+  state.testArmed ||= {};
   return state;
 }
 async function read() {
@@ -71,9 +73,9 @@ async function setupAlarm(state) {
 async function reconcile(state) {
   for (const [id,preview] of Object.entries(state.previews)) {
     const tab=await getTab(preview.tabId);
-    if (!tab) { delete state.previews[id]; continue; }
+    if (!tab || tab.groupId<0) { delete state.previews[id]; continue; }
     preview.groupId=tab.groupId;
-    if (tab.groupId>=0 && !state.groups[tab.groupId]) {
+    if (!state.groups[tab.groupId]) {
       const group=await getGroup(tab.groupId);
       if (group) state.groups[tab.groupId]={baseColor:group.color,expected:group.color,paused:false};
     }
@@ -86,9 +88,6 @@ async function reconcile(state) {
       }
       delete state.groups[id];
     } else if (!(await getGroup(id))) delete state.groups[id];
-  }
-  for (const [windowId,groupId] of Object.entries(state.owned)) {
-    if (!(await getGroup(groupId))) delete state.owned[windowId];
   }
 }
 async function paint(state) {
@@ -114,17 +113,8 @@ async function addAttention(state,tabId,source) {
   if (source==="manual" && Object.values(state.previews).some(preview=>preview.tabId===tabId && preview.source!=="favicon")) return state;
   const tab=await getTab(tabId);
   if (!tab) throw new Error("Fliken finns inte längre.");
-  let groupId=tab.groupId;
-  if (groupId<0) {
-    const prior=state.owned[tab.windowId];
-    const group=prior==null ? null : await getGroup(prior);
-    if (group?.windowId===tab.windowId) groupId=await chrome.tabs.group({tabIds:[tabId],groupId:prior});
-    else {
-      groupId=await chrome.tabs.group({tabIds:[tabId],createProperties:{windowId:tab.windowId}});
-      state.owned[tab.windowId]=groupId;
-      await chrome.tabGroups.update(groupId,{title:"Blinka"});
-    }
-  }
+  const groupId=tab.groupId;
+  if (groupId<0) return state;
   const group=await getGroup(groupId);
   if (!group) throw new Error("Flikgruppen finns inte längre.");
   if (!state.groups[groupId]) state.groups[groupId]={baseColor:group.color,expected:group.color,paused:false};
@@ -135,14 +125,23 @@ async function addAttention(state,tabId,source) {
 }
 async function startPreview(tabId) {
   const state=await read();
-  await addAttention(state,tabId,"manual");
+  const tab=await getTab(tabId);
+  if (!tab || tab.groupId<0) return state;
+  state.testArmed[tabId]={windowId:tab.windowId};
   await save(state);
-  await setupAlarm(state);
+  return state;
+}
+async function cancelPreview(tabId) {
+  const state=await read();
+  delete state.testArmed[tabId];
+  await save(state);
   return state;
 }
 async function acknowledgeTab(tabId) {
   const state=await read();
-  let changed=false;
+  let changed=Boolean(state.grace[tabId] || state.testArmed[tabId]);
+  delete state.grace[tabId];
+  delete state.testArmed[tabId];
   for (const [id,job] of Object.entries(state.previews)) {
     if (job.tabId!==tabId) continue;
     delete state.previews[id];
@@ -159,6 +158,27 @@ async function acknowledgeVisibleTab(tabId,windowId) {
   const tab=await getTab(tabId);
   if (tab?.windowId===windowId) await acknowledgeTab(tabId);
 }
+async function promoteOnLeaving(shouldPromote,at) {
+  const state=await read();
+  let changed=false;
+  for (const [id,candidate] of Object.entries(state.grace)) {
+    if (!shouldPromote(Number(id),candidate)) continue;
+    delete state.grace[id];
+    changed=true;
+    if (at>=candidate.at && at-candidate.at<GRACE_MS) {
+      await addAttention(state,Number(id),"favicon");
+    }
+  }
+  for (const [id,candidate] of Object.entries(state.testArmed)) {
+    if (!shouldPromote(Number(id),candidate)) continue;
+    delete state.testArmed[id];
+    changed=true;
+    await addAttention(state,Number(id),"manual");
+  }
+  if (!changed) return;
+  await save(state);
+  await setupAlarm(state);
+}
 async function resumeGroup(groupId) {
   const state=await read();
   const record=state.groups[groupId],group=await getGroup(groupId);
@@ -171,7 +191,7 @@ async function resumeGroup(groupId) {
   await setupAlarm(state);
   return state;
 }
-async function recordFavicon(tabId,url) {
+async function recordFavicon(tabId,url,observedAt,observedTab,focusedAtEvent) {
   const badge=chatgptFaviconBadge(url);
   const state=await read();
   const prior=state.tabs[tabId];
@@ -182,9 +202,19 @@ async function recordFavicon(tabId,url) {
     lastBadge:badge || prior?.lastBadge || null,
     lastBadgeAt:badge ? Date.now() : prior?.lastBadgeAt || null,
   };
+  if (badge!==null) delete state.grace[tabId];
   if (prior?.current==="active" && badge===null) {
-    await addAttention(state,tabId,"favicon");
-    await setupAlarm(state);
+    const tab=await getTab(tabId);
+    if (tab?.groupId>=0) {
+      const windowId=observedTab?.windowId ?? tab.windowId;
+      const wasFocused=focusedAtEvent == null ? (await chrome.windows.get(windowId)).focused : await focusedAtEvent;
+      if ((observedTab?.active ?? tab.active) && wasFocused) {
+        state.grace[tabId]={at:observedAt,windowId};
+      } else {
+        await addAttention(state,tabId,"favicon");
+        await setupAlarm(state);
+      }
+    }
   }
   await save(state);
 }
@@ -197,10 +227,11 @@ async function refreshState() {
 }
 
 chrome.runtime.onMessage.addListener((message,_sender,respond)=>{
-  if (!["state","preview","resume"].includes(message?.type)) return false;
+  if (!["state","preview","cancelPreview","resume"].includes(message?.type)) return false;
   serial(async()=>{
     if (message.type==="state") return {ok:true,state:await refreshState()};
     if (message.type==="preview") return {ok:true,state:await startPreview(message.tabId)};
+    if (message.type==="cancelPreview") return {ok:true,state:await cancelPreview(message.tabId)};
     return {ok:true,state:await resumeGroup(message.groupId)};
   }).then(respond,error=>respond({ok:false,error:String(error?.message || error)}));
   return true;
@@ -215,14 +246,28 @@ chrome.alarms.onAlarm.addListener(alarm=>{
     await setupAlarm(state);
   });
 });
-chrome.tabs.onUpdated.addListener((tabId,change)=>{
-  if (change.favIconUrl!==undefined) serial(()=>recordFavicon(tabId,change.favIconUrl));
+chrome.tabs.onUpdated.addListener((tabId,change,tab)=>{
+  if (change.favIconUrl!==undefined) {
+    const observedAt=Date.now();
+    const observedTab=tab && {active:tab.active,windowId:tab.windowId};
+    const focusedAtEvent=observedTab?.windowId == null ? null
+      : chrome.windows.get(observedTab.windowId).then(window=>window.focused,()=>false);
+    serial(()=>recordFavicon(tabId,change.favIconUrl,observedAt,observedTab,focusedAtEvent));
+  }
   if (change.groupId!==undefined) serial(()=>refreshState());
 });
-chrome.tabs.onActivated.addListener(({tabId,windowId})=>serial(()=>acknowledgeVisibleTab(tabId,windowId)));
-chrome.windows.onFocusChanged.addListener(windowId=>{
-  if (windowId===chrome.windows.WINDOW_ID_NONE) return;
+chrome.tabs.onActivated.addListener(({tabId,windowId})=>{
+  const activatedAt=Date.now();
   serial(async()=>{
+    await promoteOnLeaving((id,candidate)=>candidate.windowId===windowId && id!==tabId,activatedAt);
+    await acknowledgeVisibleTab(tabId,windowId);
+  });
+});
+chrome.windows.onFocusChanged.addListener(windowId=>{
+  const focusedAt=Date.now();
+  serial(async()=>{
+    await promoteOnLeaving((_id,candidate)=>windowId===chrome.windows.WINDOW_ID_NONE || candidate.windowId!==windowId,focusedAt);
+    if (windowId===chrome.windows.WINDOW_ID_NONE) return;
     const [tab]=await chrome.tabs.query({active:true,windowId});
     if (tab) await acknowledgeVisibleTab(tab.id,windowId);
   });
@@ -230,6 +275,8 @@ chrome.windows.onFocusChanged.addListener(windowId=>{
 chrome.tabs.onRemoved.addListener(tabId=>serial(async()=>{
   const state=await read();
   delete state.tabs[tabId];
+  delete state.grace[tabId];
+  delete state.testArmed[tabId];
   await reconcile(state);
   await save(state);
   await setupAlarm(state);
