@@ -31,7 +31,8 @@ function normalize(state) {
   state.chatMonitors ||= {};
   state.chatDiagnostics ||= {};
   state.signalErrors ||= {};
-  state.ownedGroups ||= {};
+  // Äldre versioner återanvände Blinka-grupper. Nya signaler gör inte det.
+  delete state.ownedGroups;
   return state;
 }
 async function settings() {
@@ -129,9 +130,6 @@ async function reconcile(state) {
       delete state.groups[id];
     } else if (!(await getGroup(id))) delete state.groups[id];
   }
-  for (const id of Object.keys(state.ownedGroups)) {
-    if (!(await getGroup(id))) delete state.ownedGroups[id];
-  }
 }
 async function paint(state) {
   for (const [id,record] of Object.entries(state.groups)) {
@@ -159,19 +157,8 @@ async function addAttention(state,tabId,source) {
   let groupId=Number.isInteger(tab.groupId) ? tab.groupId : -1;
   if (groupId<0) {
     try {
-      for (const [id,record] of Object.entries(state.ownedGroups)) {
-        if (record.windowId!==tab.windowId) continue;
-        const candidate=await getGroup(id);
-        if (candidate?.windowId===tab.windowId && candidate.title==="Blinka") {
-          groupId=await chrome.tabs.group({tabIds:tabId,groupId:Number(id)});
-          break;
-        }
-      }
-      if (groupId<0) {
-        groupId=await chrome.tabs.group({tabIds:tabId,createProperties:{windowId:tab.windowId}});
-        await chrome.tabGroups.update(groupId,{title:"Blinka",color:"blue"});
-        state.ownedGroups[groupId]={windowId:tab.windowId};
-      }
+      groupId=await chrome.tabs.group({tabIds:tabId,createProperties:{windowId:tab.windowId}});
+      await chrome.tabGroups.update(groupId,{title:"Blinka",color:"blue"});
     } catch (error) {
       state.signalErrors[tabId]={at:Date.now(),message:String(error?.message || error)};
       await save(state);
