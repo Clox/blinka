@@ -29,6 +29,8 @@ function normalize(state) {
   state.testArmed ||= {};
   state.chatRuns ||= {};
   state.chatMonitors ||= {};
+  state.chatDiagnostics ||= {};
+  state.signalErrors ||= {};
   state.ownedGroups ||= {};
   return state;
 }
@@ -107,7 +109,11 @@ async function setupAlarm(state) {
 async function reconcile(state) {
   for (const [id,preview] of Object.entries(state.previews)) {
     const tab=await getTab(preview.tabId);
-    if (!tab || tab.groupId<0) { delete state.previews[id]; continue; }
+    if (!tab || tab.groupId<0) {
+      if (tab && preview.source==="chatgpt-tab") state.chatDiagnostics[preview.tabId]={status:"Fliken lämnade gruppen efter signalen",at:Date.now()};
+      delete state.previews[id];
+      continue;
+    }
     preview.groupId=tab.groupId;
     if (!state.groups[tab.groupId]) {
       const group=await getGroup(tab.groupId);
@@ -150,20 +156,26 @@ async function addAttention(state,tabId,source) {
   if (source==="manual" && Object.values(state.previews).some(preview=>preview.tabId===tabId && preview.source!=="favicon")) return state;
   const tab=await getTab(tabId);
   if (!tab) throw new Error("Fliken finns inte längre.");
-  let groupId=tab.groupId;
+  let groupId=Number.isInteger(tab.groupId) ? tab.groupId : -1;
   if (groupId<0) {
-    for (const [id,record] of Object.entries(state.ownedGroups)) {
-      if (record.windowId!==tab.windowId) continue;
-      const candidate=await getGroup(id);
-      if (candidate?.windowId===tab.windowId && candidate.title==="Blinka") {
-        groupId=await chrome.tabs.group({tabIds:tabId,groupId:Number(id)});
-        break;
+    try {
+      for (const [id,record] of Object.entries(state.ownedGroups)) {
+        if (record.windowId!==tab.windowId) continue;
+        const candidate=await getGroup(id);
+        if (candidate?.windowId===tab.windowId && candidate.title==="Blinka") {
+          groupId=await chrome.tabs.group({tabIds:tabId,groupId:Number(id)});
+          break;
+        }
       }
-    }
-    if (groupId<0) {
-      groupId=await chrome.tabs.group({tabIds:tabId});
-      await chrome.tabGroups.update(groupId,{title:"Blinka",color:"blue"});
-      state.ownedGroups[groupId]={windowId:tab.windowId};
+      if (groupId<0) {
+        groupId=await chrome.tabs.group({tabIds:tabId,createProperties:{windowId:tab.windowId}});
+        await chrome.tabGroups.update(groupId,{title:"Blinka",color:"blue"});
+        state.ownedGroups[groupId]={windowId:tab.windowId};
+      }
+    } catch (error) {
+      state.signalErrors[tabId]={at:Date.now(),message:String(error?.message || error)};
+      await save(state);
+      throw error;
     }
   }
   const group=await getGroup(groupId);
@@ -172,6 +184,7 @@ async function addAttention(state,tabId,source) {
   const id=crypto.randomUUID();
   state.previews[id]={id,tabId,groupId,source};
   await paint(state);
+  delete state.signalErrors[tabId];
   return state;
 }
 async function startPreview(tabId) {
@@ -276,12 +289,14 @@ async function recordChatRun(message,sender) {
   const state=await read();
   if (message.type==="chatMonitorReady") {
     state.chatMonitors[tabId]=Date.now();
+    state.chatDiagnostics[tabId]={status:"Bevakningen anslöt",at:Date.now()};
     await save(state);
     return;
   }
   if (message.type==="chatRunStarted") {
     if (typeof message.runId!=="string" || message.runId.length>100) return;
     state.chatRuns[tabId]={runId:message.runId,at:Date.now()};
+    state.chatDiagnostics[tabId]={status:"Stoppa observerad",at:Date.now()};
     delete state.grace[tabId];
     await save(state);
     return;
@@ -290,6 +305,7 @@ async function recordChatRun(message,sender) {
   if (!run || run.runId!==message.runId) return;
   if (message.type==="chatRunResumed") {
     delete run.disappeared;
+    state.chatDiagnostics[tabId]={status:"Stoppa återkom",at:Date.now()};
     await save(state);
     return;
   }
@@ -298,6 +314,7 @@ async function recordChatRun(message,sender) {
     if (!tab) return;
     const focused=(await chrome.windows.get(tab.windowId)).focused;
     run.disappeared={at:Date.now(),wasVisible:tab.active && focused,windowId:tab.windowId};
+    state.chatDiagnostics[tabId]={status:"Stoppa försvann",at:Date.now()};
     await save(state);
     return;
   }
@@ -305,18 +322,25 @@ async function recordChatRun(message,sender) {
   if (!disappeared) return;
   delete state.chatRuns[tabId];
   const tab=await getTab(tabId);
+  let outcome="Ingen signal";
   if (tab) {
     const focused=(await chrome.windows.get(tab.windowId)).focused;
     const visible=tab.active && focused;
     if (disappeared.wasVisible) {
-      if (visible) state.grace[tabId]={at:disappeared.at,windowId:tab.windowId,source:"chatgpt-tab"};
+      if (visible) {
+        state.grace[tabId]={at:disappeared.at,windowId:tab.windowId,source:"chatgpt-tab"};
+        outcome="Fliken var synlig; ingen signal";
+      }
       else if (disappeared.leftAt>=disappeared.at && disappeared.leftAt-disappeared.at<GRACE_MS) {
         await addAttention(state,tabId,"chatgpt-tab"); await setupAlarm(state);
+        outcome="Uppmärksamhetssignal startad";
       }
     } else {
       await addAttention(state,tabId,"chatgpt-tab"); await setupAlarm(state);
+      outcome="Uppmärksamhetssignal startad";
     }
   }
+  state.chatDiagnostics[tabId]={status:outcome,at:Date.now()};
   await save(state);
 }
 async function markChatLeaving(shouldMark,at) {
@@ -382,6 +406,8 @@ chrome.tabs.onUpdated.addListener((tabId,change,tab)=>{
     const state=await read();
     delete state.chatRuns[tabId];
     delete state.chatMonitors[tabId];
+    delete state.chatDiagnostics[tabId];
+    delete state.signalErrors[tabId];
     await save(state);
   });
   if (change.favIconUrl!==undefined && !isChatTab(tab?.url)) {
@@ -418,6 +444,8 @@ chrome.tabs.onRemoved.addListener(tabId=>serial(async()=>{
   delete state.testArmed[tabId];
   delete state.chatRuns[tabId];
   delete state.chatMonitors[tabId];
+  delete state.chatDiagnostics[tabId];
+  delete state.signalErrors[tabId];
   await reconcile(state);
   await save(state);
   await setupAlarm(state);

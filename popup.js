@@ -32,7 +32,7 @@ async function refresh() {
       ? "Ingen ChatGPT-markör observerad på den här fliken."
       : `Nu: ${names[favicon.current] || "ingen"}. Senast: ${names[favicon.lastBadge]} ${new Date(favicon.lastBadgeAt).toLocaleTimeString()}.`;
   $("faviconNote").textContent=chatTab
-    ? "När Stoppa försvinner kan tråden behöva kontrolleras. Det bevisar inte att svaret är färdigt."
+    ? `${state.signalErrors?.[tab.id] ? `Gruppfel: ${state.signalErrors[tab.id].message}. ` : ""}${state.chatDiagnostics?.[tab.id] ? `Senast: ${state.chatDiagnostics[tab.id].status} ${new Date(state.chatDiagnostics[tab.id].at).toLocaleTimeString()}. ` : ""}När Stoppa försvinner kan tråden behöva kontrolleras. Det bevisar inte att svaret är färdigt.`
     : "Märket kan också försvinna vid avbrott eller när ChatGPT släpper fliken. Kontrollera resultatet i sidopanelen.";
   const jobs=Object.values(state.previews).filter(item=>item.tabId===tab?.id);
   const manual=jobs.find(item=>item.source!=="favicon");
