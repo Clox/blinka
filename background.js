@@ -6,6 +6,8 @@ const CHAT_SCRIPT_ID = "blinka-chatgpt-tab";
 const CHAT_ORIGIN = "https://chatgpt.com/*";
 const ALARM = "blinkaColorTick";
 const GROUP_COLORS = ["grey","blue","red","yellow","green","pink","purple","cyan","orange"];
+const IDLE_TITLE = "○→";
+const ACTIVE_TITLE = "●→";
 const GRACE_MS = 1000;
 let queue = Promise.resolve();
 let blinkTimer = null;
@@ -167,9 +169,9 @@ async function reconcile(state) {
         const update={};
         if (!record.paused && group.color===record.expected) update.color=record.baseColor;
         const owned=state.ownedGroups[id];
-        if (owned && group.title===owned.expectedTitle && owned.expectedTitle!=="○") {
-          update.title="○";
-          owned.expectedTitle="○";
+        if (owned && group.title===owned.expectedTitle && owned.expectedTitle!==IDLE_TITLE) {
+          update.title=IDLE_TITLE;
+          owned.expectedTitle=IDLE_TITLE;
         }
         if (Object.keys(update).length) await chrome.tabGroups.update(Number(id),update);
       }
@@ -202,7 +204,7 @@ async function paint(state) {
     const color=record.expected===blinkColorA ? blinkColorB : blinkColorA;
     const update={color};
     if (owned) {
-      owned.expectedTitle=owned.expectedTitle==="○" ? "●" : "○";
+      owned.expectedTitle=owned.expectedTitle.startsWith("○") ? ACTIVE_TITLE : IDLE_TITLE;
       update.title=owned.expectedTitle;
     }
     record.expected=color;
@@ -218,8 +220,8 @@ async function addAttention(state,tabId,source) {
   if (groupId<0) {
     try {
       groupId=await chrome.tabs.group({tabIds:tabId,createProperties:{windowId:tab.windowId}});
-      await chrome.tabGroups.update(groupId,{title:"○",color:"blue"});
-      state.ownedGroups[groupId]={tabId,windowId:tab.windowId,expectedTitle:"○"};
+      await chrome.tabGroups.update(groupId,{title:IDLE_TITLE,color:"blue"});
+      state.ownedGroups[groupId]={tabId,windowId:tab.windowId,expectedTitle:IDLE_TITLE};
     } catch (error) {
       state.signalErrors[tabId]={at:Date.now(),message:String(error?.message || error)};
       await save(state);

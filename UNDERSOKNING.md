@@ -20,6 +20,8 @@ Version 0.20.0 rättar den manuella testsignalen. Förberedelsen låg i `testArm
 
 Version 0.21.0 ger nya Blinka-grupper titeln `○` och växlar den mellan `○` och `●` i samma uppdatering som gruppfärgen. Bara grupper som Blinka skapat får titeln ändrad. När den ursprungliga fliken öppnas efter en signal och gruppen då bara innehåller den fliken används `chrome.tabs.ungroup()`; Chrome tar bort den tomma gruppen. Ägarskapet (grupp-ID, ursprungligt flik-ID, fönster-ID och förväntad titel) lagras i `chrome.storage.session`, inte i permanent lokal lagring. Detta överlever service workerns omstart men inte en ny Chrome-session; äldre grupper och grupper som flyttats eller döpts om lämnas orörda. Befintliga användargrupper får bara den tidigare färgsignalen. Lokala Chrome-API-simuleringar täcker titelväxling, borttagning av ensamma egna grupper och bevarande av befintliga, omdöpta och flerflikiga grupper. Den nya UI-effekten är ännu inte praktiskt testad i användarens Chrome.
 
+Version 0.22.0 lägger till en högerpil i gruppetiketten: `○→` och `●→`. Pilen ligger kvar i båda tillstånden och pekar mot fliken till höger om gruppetiketten. Ny titel används vid skapande, blinkning och återgång till viloläge. Tidigare sessionägda grupper med `○` eller `●` kan fortsätta blinkningen och övergår då till titlarna med pil.
+
 ## Verifierat
 
 - Sidopanelen består av en tilläggssida som visar `chatgpt.com` i en inbäddad ram. Blinkas gamla innehållsskript nådde vanliga ChatGPT-flikar men gav ingen träff i sidopanelens iframe, trots att panelen var öppen. Det visar utebliven åtkomst i den provade konfigurationen, inte ett allmänt förbud. Iframe-proben är borttagen.
