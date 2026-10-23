@@ -48,6 +48,10 @@ async function refresh() {
     : armed ? "Testsignalen startar när du lämnar fliken. Välj tillbaka för att stoppa den."
     : tab?.groupId<0 ? "Fliken saknar grupp. Blinka skapar en när fliken behöver uppmärksamhet."
     : "Ingen väntande signal på denna flik.";
+  const groupJobs=Object.values(state.previews).filter(item=>item.groupId===tab?.groupId);
+  $("groupStatus").textContent=tab?.groupId>=0
+    ? `Väntande signaler i gruppen: ${groupJobs.length}${groupJobs.length ? ` (flik ${[...new Set(groupJobs.map(item=>item.tabId))].join(", ")})` : ""}.`
+    : "";
   if (group?.paused) {
     const resume=document.createElement("button");
     resume.textContent="Återuppta färgväxling";

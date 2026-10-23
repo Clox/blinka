@@ -108,12 +108,24 @@ async function setupAlarm(state) {
   else await chrome.alarms.clear(ALARM);
 }
 async function reconcile(state) {
+  const windowFocus=new Map();
   for (const [id,preview] of Object.entries(state.previews)) {
     const tab=await getTab(preview.tabId);
     if (!tab || tab.groupId<0) {
       if (tab && preview.source==="chatgpt-tab") state.chatDiagnostics[preview.tabId]={status:"Fliken lämnade gruppen efter signalen",at:Date.now()};
       delete state.previews[id];
       continue;
+    }
+    if (tab.active) {
+      if (!windowFocus.has(tab.windowId)) {
+        let focused=false;
+        try { focused=(await chrome.windows.get(tab.windowId)).focused; } catch { /* Fönstret kan ha stängts. */ }
+        windowFocus.set(tab.windowId,focused);
+      }
+      if (windowFocus.get(tab.windowId)) {
+        delete state.previews[id];
+        continue;
+      }
     }
     preview.groupId=tab.groupId;
     if (!state.groups[tab.groupId]) {
@@ -207,7 +219,15 @@ async function acknowledgeVisibleTab(tabId,windowId) {
   const window=await chrome.windows.get(windowId);
   if (!window.focused) return;
   const tab=await getTab(tabId);
-  if (tab?.windowId===windowId) await acknowledgeTab(tabId);
+  if (tab?.windowId===windowId && tab.active) await acknowledgeTab(tabId);
+}
+function recheckVisibleTabSoon(windowId) {
+  setTimeout(()=>{
+    serial(async()=>{
+      const [tab]=await chrome.tabs.query({active:true,windowId});
+      if (tab) await acknowledgeVisibleTab(tab.id,windowId);
+    }).catch(console.error);
+  },250);
 }
 async function promoteOnLeaving(shouldPromote,at) {
   const state=await read();
@@ -413,6 +433,7 @@ chrome.tabs.onActivated.addListener(({tabId,windowId})=>{
     await promoteOnLeaving((id,candidate)=>candidate.windowId===windowId && id!==tabId,activatedAt);
     await acknowledgeVisibleTab(tabId,windowId);
   });
+  recheckVisibleTabSoon(windowId);
 });
 chrome.windows.onFocusChanged.addListener(windowId=>{
   const focusedAt=Date.now();
@@ -423,6 +444,7 @@ chrome.windows.onFocusChanged.addListener(windowId=>{
     const [tab]=await chrome.tabs.query({active:true,windowId});
     if (tab) await acknowledgeVisibleTab(tab.id,windowId);
   });
+  if (windowId!==chrome.windows.WINDOW_ID_NONE) recheckVisibleTabSoon(windowId);
 });
 chrome.tabs.onRemoved.addListener(tabId=>serial(async()=>{
   const state=await read();
