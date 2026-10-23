@@ -41,12 +41,14 @@
     chrome.runtime.onMessage.removeListener(onMessage);
     delete globalThis.__blinkaChatMonitor;
   }
-  function onMessage(message) {
+  function onMessage(message,_sender,respond) {
     if (message?.type === 'stopChatMonitor') stop();
+    if (message?.type === 'chatMonitorPing') respond({running,stopVisible:Boolean(document.querySelector(SELECTOR))});
   }
   globalThis.__blinkaChatMonitor = {stop};
   chrome.runtime.onMessage.addListener(onMessage);
   observer = new MutationObserver(check);
   observer.observe(document.documentElement, {childList:true, subtree:true, attributes:true, attributeFilter:['aria-label']});
+  chrome.runtime.sendMessage({type:'chatMonitorReady'}).catch(() => {});
   check();
 })();

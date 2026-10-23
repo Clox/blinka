@@ -19,9 +19,15 @@ async function refresh() {
   const favicon=state.tabs[tab?.id];
   const names={active:"aktiv",deliverable:"resultat",handoff:"överlämning"};
   const chatTab=tab?.url?.startsWith("https://chatgpt.com/");
+  let monitor=null;
+  if (chatTab && settings.chatTabsEnabled) {
+    try { monitor=await chrome.tabs.sendMessage(tab.id,{type:"chatMonitorPing"}); } catch { /* Skriptet körs inte på fliken. */ }
+  }
   $("faviconProbe").textContent=chatTab
     ? !settings.chatTabsEnabled ? "Bevakning av vanliga ChatGPT-flikar är avstängd."
-      : state.chatRuns?.[tab.id] ? "Stoppa-knappen observerad: körning pågår eller avslutas." : "Ingen pågående körning observerad på den här fliken."
+      : !monitor ? "Bevakningen har inte anslutit till den här fliken. Ladda om ChatGPT-fliken."
+      : monitor.stopVisible ? "Stoppa-knappen finns: körning pågår eller avslutas."
+      : state.chatRuns?.[tab.id] ? "Stoppa-knappen har försvunnit; Blinka väntar kort innan signalen." : "Bevakningen är aktiv. Ingen Stoppa-knapp finns just nu."
     : !favicon?.lastBadge
       ? "Ingen ChatGPT-markör observerad på den här fliken."
       : `Nu: ${names[favicon.current] || "ingen"}. Senast: ${names[favicon.lastBadge]} ${new Date(favicon.lastBadgeAt).toLocaleTimeString()}.`;
@@ -31,7 +37,7 @@ async function refresh() {
   const jobs=Object.values(state.previews).filter(item=>item.tabId===tab?.id);
   const manual=jobs.find(item=>item.source!=="favicon");
   const armed=Boolean(state.testArmed?.[tab?.id]);
-  $("preview").disabled=tab?.id == null || tab.groupId<0 || Boolean(manual);
+  $("preview").disabled=tab?.id == null || Boolean(manual);
   $("preview").textContent=armed ? "Avbryt testsignal" : "Förbered manuell testsignal";
   $("preview").onclick=()=>run(()=>send({type:armed ? "cancelPreview" : "preview",tabId:tab.id}));
   $("previewControls").replaceChildren();
@@ -40,7 +46,7 @@ async function refresh() {
   $("previewStatus").textContent=jobs.length
     ? group?.paused ? "Färgväxlingen pausades efter en annan färgändring." : group ? "Den här fliken har en väntande signal. Välj en annan flik och kom tillbaka för att kvittera." : "Fliken har lämnat den signalerande gruppen."
     : armed ? "Testsignalen startar när du lämnar fliken. Välj tillbaka för att stoppa den."
-    : tab?.groupId<0 ? "Fliken saknar grupp. Blinka skapar ingen grupp automatiskt."
+    : tab?.groupId<0 ? "Fliken saknar grupp. Blinka skapar en när fliken behöver uppmärksamhet."
     : "Ingen väntande signal på denna flik.";
   if (group?.paused) {
     const resume=document.createElement("button");

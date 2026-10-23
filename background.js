@@ -28,6 +28,8 @@ function normalize(state) {
   state.grace ||= {};
   state.testArmed ||= {};
   state.chatRuns ||= {};
+  state.chatMonitors ||= {};
+  state.ownedGroups ||= {};
   return state;
 }
 async function settings() {
@@ -121,6 +123,9 @@ async function reconcile(state) {
       delete state.groups[id];
     } else if (!(await getGroup(id))) delete state.groups[id];
   }
+  for (const id of Object.keys(state.ownedGroups)) {
+    if (!(await getGroup(id))) delete state.ownedGroups[id];
+  }
 }
 async function paint(state) {
   for (const [id,record] of Object.entries(state.groups)) {
@@ -145,8 +150,22 @@ async function addAttention(state,tabId,source) {
   if (source==="manual" && Object.values(state.previews).some(preview=>preview.tabId===tabId && preview.source!=="favicon")) return state;
   const tab=await getTab(tabId);
   if (!tab) throw new Error("Fliken finns inte längre.");
-  const groupId=tab.groupId;
-  if (groupId<0) return state;
+  let groupId=tab.groupId;
+  if (groupId<0) {
+    for (const [id,record] of Object.entries(state.ownedGroups)) {
+      if (record.windowId!==tab.windowId) continue;
+      const candidate=await getGroup(id);
+      if (candidate?.windowId===tab.windowId && candidate.title==="Blinka") {
+        groupId=await chrome.tabs.group({tabIds:tabId,groupId:Number(id)});
+        break;
+      }
+    }
+    if (groupId<0) {
+      groupId=await chrome.tabs.group({tabIds:tabId});
+      await chrome.tabGroups.update(groupId,{title:"Blinka",color:"blue"});
+      state.ownedGroups[groupId]={windowId:tab.windowId};
+    }
+  }
   const group=await getGroup(groupId);
   if (!group) throw new Error("Flikgruppen finns inte längre.");
   if (!state.groups[groupId]) state.groups[groupId]={baseColor:group.color,expected:group.color,paused:false};
@@ -158,7 +177,7 @@ async function addAttention(state,tabId,source) {
 async function startPreview(tabId) {
   const state=await read();
   const tab=await getTab(tabId);
-  if (!tab || tab.groupId<0) return state;
+  if (!tab) return state;
   state.testArmed[tabId]={windowId:tab.windowId};
   await save(state);
   return state;
@@ -238,7 +257,7 @@ async function recordFavicon(tabId,url,observedAt,observedTab,focusedAtEvent) {
   if (badge!==null) delete state.grace[tabId];
   if (prior?.current==="active" && badge===null) {
     const tab=await getTab(tabId);
-    if (tab?.groupId>=0) {
+    if (tab) {
       const windowId=observedTab?.windowId ?? tab.windowId;
       const wasFocused=focusedAtEvent == null ? (await chrome.windows.get(windowId)).focused : await focusedAtEvent;
       if ((observedTab?.active ?? tab.active) && wasFocused) {
@@ -255,6 +274,11 @@ async function recordChatRun(message,sender) {
   if (!(await settings()).chatTabsEnabled || sender.frameId!==0 || !isChatTab(sender.url) || !sender.tab?.id) return;
   const tabId=sender.tab.id;
   const state=await read();
+  if (message.type==="chatMonitorReady") {
+    state.chatMonitors[tabId]=Date.now();
+    await save(state);
+    return;
+  }
   if (message.type==="chatRunStarted") {
     if (typeof message.runId!=="string" || message.runId.length>100) return;
     state.chatRuns[tabId]={runId:message.runId,at:Date.now()};
@@ -281,7 +305,7 @@ async function recordChatRun(message,sender) {
   if (!disappeared) return;
   delete state.chatRuns[tabId];
   const tab=await getTab(tabId);
-  if (tab?.groupId>=0) {
+  if (tab) {
     const focused=(await chrome.windows.get(tab.windowId)).focused;
     const visible=tab.active && focused;
     if (disappeared.wasVisible) {
@@ -316,7 +340,7 @@ async function refreshState() {
 }
 
 chrome.runtime.onMessage.addListener((message,sender,respond)=>{
-  if (["chatRunStarted","chatRunDisappeared","chatRunResumed","chatRunEnded"].includes(message?.type)) {
+  if (["chatMonitorReady","chatRunStarted","chatRunDisappeared","chatRunResumed","chatRunEnded"].includes(message?.type)) {
     serial(()=>recordChatRun(message,sender)).then(()=>respond({ok:true}),error=>respond({ok:false,error:String(error)}));
     return true;
   }
@@ -331,7 +355,7 @@ chrome.runtime.onMessage.addListener((message,sender,respond)=>{
       await chrome.storage.local.set({[SETTINGS_KEY]:next});
       if (message.key==="chatTabsEnabled") {
         const state=await read();
-        if (!message.value) state.chatRuns={};
+        if (!message.value) { state.chatRuns={}; state.chatMonitors={}; }
         await save(state);
         await syncChatScript();
       }
@@ -354,6 +378,12 @@ chrome.alarms.onAlarm.addListener(alarm=>{
   });
 });
 chrome.tabs.onUpdated.addListener((tabId,change,tab)=>{
+  if (change.status==="loading") serial(async()=>{
+    const state=await read();
+    delete state.chatRuns[tabId];
+    delete state.chatMonitors[tabId];
+    await save(state);
+  });
   if (change.favIconUrl!==undefined && !isChatTab(tab?.url)) {
     const observedAt=Date.now();
     const observedTab=tab && {active:tab.active,windowId:tab.windowId,url:tab.url};
@@ -387,6 +417,7 @@ chrome.tabs.onRemoved.addListener(tabId=>serial(async()=>{
   delete state.grace[tabId];
   delete state.testArmed[tabId];
   delete state.chatRuns[tabId];
+  delete state.chatMonitors[tabId];
   await reconcile(state);
   await save(state);
   await setupAlarm(state);
@@ -412,6 +443,7 @@ chrome.permissions.onRemoved.addListener(()=>serial(async()=>{
     await chrome.storage.local.set({[SETTINGS_KEY]:next});
     const state=await read();
     state.chatRuns={};
+    state.chatMonitors={};
     await save(state);
     await syncChatScript();
   }
