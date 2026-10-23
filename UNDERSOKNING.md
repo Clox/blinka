@@ -22,6 +22,8 @@ Version 0.21.0 ger nya Blinka-grupper titeln `○` och växlar den mellan `○` 
 
 Version 0.22.0 lägger till en högerpil i gruppetiketten: `○→` och `●→`. Pilen ligger kvar i båda tillstånden och pekar mot fliken till höger om gruppetiketten. Ny titel används vid skapande, blinkning och återgång till viloläge. Tidigare sessionägda grupper med `○` eller `●` kan fortsätta blinkningen och övergår då till titlarna med pil.
 
+Version 0.23.0 byter den smala pilen mot den konturerade `⇨`: `○⇨` och `●⇨`. Tidigare sessionägda grupper med `→` växlar över vid nästa blinkning eller återgång till viloläge.
+
 ## Verifierat
 
 - Sidopanelen består av en tilläggssida som visar `chatgpt.com` i en inbäddad ram. Blinkas gamla innehållsskript nådde vanliga ChatGPT-flikar men gav ingen träff i sidopanelens iframe, trots att panelen var öppen. Det visar utebliven åtkomst i den provade konfigurationen, inte ett allmänt förbud. Iframe-proben är borttagen.
