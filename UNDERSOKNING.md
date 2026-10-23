@@ -1,6 +1,6 @@
 # Teknisk undersökning: ChatGPTs sidopanel och Blinka
 
-Senast uppdaterad 2026-10-23. Aktiv Chrome-profil: `Default`. ChatGPT-tillägg: `hehggadaopoacecdllhhajmbjkdcmajg`, version `1.26.1020.11845` enligt profilens `Preferences`. Installationen har bara lästs, aldrig ändrats. Inga cookies, inloggningsuppgifter eller privata konversationer har lästs.
+Senast uppdaterad 2026-10-24. Aktiv Chrome-profil: `Default`. ChatGPT-tillägg: `hehggadaopoacecdllhhajmbjkdcmajg`, version `1.26.1020.11845` enligt profilens `Preferences` vid undersökningen. Installationen har bara lästs, aldrig ändrats. Inga cookies, inloggningsuppgifter eller privata konversationer har lästs.
 
 ## Vanliga ChatGPT-flikar (version 0.14.0)
 
@@ -17,6 +17,8 @@ Version 0.18.0 lagrar två valda Chrome-gruppfärger och ett intervall per färg
 Version 0.19.0 ersätter färgnamn som valkontroll med synliga färgrutor i popupen. Varje ruta har fortfarande ett tillgängligt namn för hjälpmedel och ett namn vid muspekaren. Färgproverna är ungefärliga eftersom Chromes tema kan ändra den faktiska gruppnyansen. Popupen ger hastighetsreglaget ett startvärde och ersätter saknade eller ogiltiga värden med 1000 ms, så att en blandning av gammal och ny popup/bakgrundsprocess vid omladdning inte visar `NaN s`. Lagringsformatet och signalhanteringen är oförändrade.
 
 Version 0.20.0 rättar den manuella testsignalen. Förberedelsen låg i `testArmed`, men kunde tas bort av `acknowledgeTab()` medan samma flik ännu var synlig. Dessutom kunde popupens fokusförändring tolkas som att fliken hade lämnats. Nu kvitteras bara påbörjade signaler; den förberedda testsignalen sparas tills ett verkligt flikbyte eller fokusförlust efter att popupen stängts. Popupen håller en port öppen så bakgrundsprocessen kan skilja dess eget fokusbyte från att Chrome lämnas. Lokala tester med simulerade Chrome-händelser täcker flikbyte, återkomst, programbyte och ordningsföljden mellan fokus- och popupstängningshändelser.
+
+Version 0.21.0 ger nya Blinka-grupper titeln `○` och växlar den mellan `○` och `●` i samma uppdatering som gruppfärgen. Bara grupper som Blinka skapat får titeln ändrad. När den ursprungliga fliken öppnas efter en signal och gruppen då bara innehåller den fliken används `chrome.tabs.ungroup()`; Chrome tar bort den tomma gruppen. Ägarskapet (grupp-ID, ursprungligt flik-ID, fönster-ID och förväntad titel) lagras i `chrome.storage.session`, inte i permanent lokal lagring. Detta överlever service workerns omstart men inte en ny Chrome-session; äldre grupper och grupper som flyttats eller döpts om lämnas orörda. Befintliga användargrupper får bara den tidigare färgsignalen. Lokala Chrome-API-simuleringar täcker titelväxling, borttagning av ensamma egna grupper och bevarande av befintliga, omdöpta och flerflikiga grupper. Den nya UI-effekten är ännu inte praktiskt testad i användarens Chrome.
 
 ## Verifierat
 

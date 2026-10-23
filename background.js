@@ -1,6 +1,7 @@
 const KEY = "blinkaFaviconV1";
 const LEGACY_KEY = "blinkaManualV1";
 const SETTINGS_KEY = "blinkaSettingsV1";
+const OWNED_KEY = "blinkaOwnedGroupsV1";
 const CHAT_SCRIPT_ID = "blinka-chatgpt-tab";
 const CHAT_ORIGIN = "https://chatgpt.com/*";
 const ALARM = "blinkaColorTick";
@@ -72,9 +73,13 @@ function isChatTab(url) {
   try { return new URL(url).origin==="https://chatgpt.com"; } catch { return false; }
 }
 async function read() {
-  const stored=await chrome.storage.local.get([KEY,LEGACY_KEY]);
+  const [stored,owned]=await Promise.all([chrome.storage.local.get([KEY,LEGACY_KEY]),chrome.storage.session.get(OWNED_KEY)]);
   const old=stored[LEGACY_KEY];
-  if (!old && stored[KEY]) return normalize(stored[KEY]);
+  if (!old && stored[KEY]) {
+    const state=normalize(stored[KEY]);
+    state.ownedGroups=owned[OWNED_KEY] || {};
+    return state;
+  }
   for (const [id,record] of Object.entries(old?.groups || {})) {
     let group;
     try { group=await chrome.tabGroups.get(Number(id)); } catch { continue; }
@@ -84,11 +89,17 @@ async function read() {
   }
   await chrome.alarms.clear(ALARM);
   const state=normalize(stored[KEY] || {tabs:old?.probes?.faviconTabs || {}});
+  state.ownedGroups=owned[OWNED_KEY] || {};
   await save(state);
   if (old) await chrome.storage.local.remove(LEGACY_KEY);
   return state;
 }
-async function save(state) { await chrome.storage.local.set({[KEY]:state}); }
+async function save(state) {
+  const persistent={...state};
+  delete persistent.ownedGroups;
+  await chrome.storage.local.set({[KEY]:persistent});
+  await chrome.storage.session.set({[OWNED_KEY]:state.ownedGroups || {}});
+}
 async function getTab(id) { try { return await chrome.tabs.get(Number(id)); } catch { return null; } }
 async function getGroup(id) { try { return await chrome.tabGroups.get(Number(id)); } catch { return null; } }
 async function syncBlinkTimer(state) {
@@ -152,11 +163,22 @@ async function reconcile(state) {
   for (const [id,record] of Object.entries(state.groups)) {
     if (!Object.values(state.previews).some(preview=>preview.groupId===Number(id))) {
       const group=await getGroup(id);
-      if (group && !record.paused && group.color===record.expected) {
-        await chrome.tabGroups.update(Number(id),{color:record.baseColor});
+      if (group) {
+        const update={};
+        if (!record.paused && group.color===record.expected) update.color=record.baseColor;
+        const owned=state.ownedGroups[id];
+        if (owned && group.title===owned.expectedTitle && owned.expectedTitle!=="○") {
+          update.title="○";
+          owned.expectedTitle="○";
+        }
+        if (Object.keys(update).length) await chrome.tabGroups.update(Number(id),update);
       }
       delete state.groups[id];
     } else if (!(await getGroup(id))) delete state.groups[id];
+  }
+  for (const [id,owned] of Object.entries(state.ownedGroups)) {
+    const [group,tab]=await Promise.all([getGroup(id),getTab(owned.tabId)]);
+    if (!group || tab?.groupId!==Number(id) || group.windowId!==owned.windowId || group.title!==owned.expectedTitle) delete state.ownedGroups[id];
   }
 }
 async function paint(state) {
@@ -169,13 +191,22 @@ async function paint(state) {
       record.baseColor=group.color;
       record.expected=group.color;
       record.paused=true;
+      delete state.ownedGroups[id];
       continue;
     }
-    const color=record.expected===blinkColorA ? blinkColorB : blinkColorA;
-    if (group.color!==color) {
-      record.expected=color;
-      await chrome.tabGroups.update(Number(id),{color});
+    let owned=state.ownedGroups[id];
+    if (owned && group.title!==owned.expectedTitle) {
+      delete state.ownedGroups[id];
+      owned=null;
     }
+    const color=record.expected===blinkColorA ? blinkColorB : blinkColorA;
+    const update={color};
+    if (owned) {
+      owned.expectedTitle=owned.expectedTitle==="○" ? "●" : "○";
+      update.title=owned.expectedTitle;
+    }
+    record.expected=color;
+    await chrome.tabGroups.update(Number(id),update);
   }
 }
 async function addAttention(state,tabId,source) {
@@ -187,7 +218,8 @@ async function addAttention(state,tabId,source) {
   if (groupId<0) {
     try {
       groupId=await chrome.tabs.group({tabIds:tabId,createProperties:{windowId:tab.windowId}});
-      await chrome.tabGroups.update(groupId,{title:"Blinka",color:"blue"});
+      await chrome.tabGroups.update(groupId,{title:"○",color:"blue"});
+      state.ownedGroups[groupId]={tabId,windowId:tab.windowId,expectedTitle:"○"};
     } catch (error) {
       state.signalErrors[tabId]={at:Date.now(),message:String(error?.message || error)};
       await save(state);
@@ -226,8 +258,20 @@ async function acknowledgeTab(tabId) {
     delete state.previews[id];
     changed=true;
   }
-  if (!changed) return;
   await reconcile(state);
+  const tab=await getTab(tabId);
+  if (tab?.groupId>=0) {
+    const owned=state.ownedGroups[tab.groupId];
+    if (owned?.tabId===tabId && !Object.values(state.previews).some(preview=>preview.groupId===tab.groupId)) {
+      const members=await chrome.tabs.query({groupId:tab.groupId});
+      if (members.length===1 && members[0].id===tabId) {
+        await chrome.tabs.ungroup(tabId);
+        delete state.ownedGroups[tab.groupId];
+        changed=true;
+      }
+    }
+  }
+  if (!changed) return;
   await save(state);
   await setupAlarm(state);
 }
@@ -520,12 +564,18 @@ chrome.tabs.onDetached.addListener(()=>serial(()=>refreshState()));
 chrome.tabGroups.onUpdated.addListener(group=>serial(async()=>{
   const state=await read();
   const record=state.groups[group.id];
-  if (!record) return;
+  const owned=state.ownedGroups[group.id];
   const current=await getGroup(group.id);
+  if (owned && current && current.title!==owned.expectedTitle) {
+    delete state.ownedGroups[group.id];
+    await save(state);
+  }
+  if (!record) return;
   if (current && current.color!==record.expected) {
     record.baseColor=current.color;
     record.expected=current.color;
     record.paused=true;
+    delete state.ownedGroups[group.id];
     await save(state);
     await syncBlinkTimer(state);
   }
