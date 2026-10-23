@@ -16,6 +16,8 @@ Version 0.18.0 lagrar två valda Chrome-gruppfärger och ett intervall per färg
 
 Version 0.19.0 ersätter färgnamn som valkontroll med synliga färgrutor i popupen. Varje ruta har fortfarande ett tillgängligt namn för hjälpmedel och ett namn vid muspekaren. Färgproverna är ungefärliga eftersom Chromes tema kan ändra den faktiska gruppnyansen. Popupen ger hastighetsreglaget ett startvärde och ersätter saknade eller ogiltiga värden med 1000 ms, så att en blandning av gammal och ny popup/bakgrundsprocess vid omladdning inte visar `NaN s`. Lagringsformatet och signalhanteringen är oförändrade.
 
+Version 0.20.0 rättar den manuella testsignalen. Förberedelsen låg i `testArmed`, men kunde tas bort av `acknowledgeTab()` medan samma flik ännu var synlig. Dessutom kunde popupens fokusförändring tolkas som att fliken hade lämnats. Nu kvitteras bara påbörjade signaler; den förberedda testsignalen sparas tills ett verkligt flikbyte eller fokusförlust efter att popupen stängts. Popupen håller en port öppen så bakgrundsprocessen kan skilja dess eget fokusbyte från att Chrome lämnas. Lokala tester med simulerade Chrome-händelser täcker flikbyte, återkomst, programbyte och ordningsföljden mellan fokus- och popupstängningshändelser.
+
 ## Verifierat
 
 - Sidopanelen består av en tilläggssida som visar `chatgpt.com` i en inbäddad ram. Blinkas gamla innehållsskript nådde vanliga ChatGPT-flikar men gav ingen träff i sidopanelens iframe, trots att panelen var öppen. Det visar utebliven åtkomst i den provade konfigurationen, inte ett allmänt förbud. Iframe-proben är borttagen.

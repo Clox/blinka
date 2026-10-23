@@ -1,4 +1,5 @@
 const $ = id => document.getElementById(id);
+const popupPort=chrome.runtime.connect({name:"blinka-popup"});
 let currentBlinkColors={colorA:"red",colorB:"yellow"};
 function validSpeed(value) {
   const ms=Number(value);

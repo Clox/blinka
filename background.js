@@ -10,6 +10,7 @@ let queue = Promise.resolve();
 let blinkTimer = null;
 let blinkTimerPeriod = null;
 let blinkTickPending = false;
+let popupConnections = 0;
 function serial(fn) { const next=queue.then(fn); queue=next.catch(console.error); return next; }
 
 function chatgptFaviconBadge(url) {
@@ -218,9 +219,8 @@ async function cancelPreview(tabId) {
 }
 async function acknowledgeTab(tabId) {
   const state=await read();
-  let changed=Boolean(state.grace[tabId] || state.testArmed[tabId]);
+  let changed=Boolean(state.grace[tabId]);
   delete state.grace[tabId];
-  delete state.testArmed[tabId];
   for (const [id,job] of Object.entries(state.previews)) {
     if (job.tabId!==tabId) continue;
     delete state.previews[id];
@@ -245,7 +245,7 @@ function recheckVisibleTabSoon(windowId) {
     }).catch(console.error);
   },250);
 }
-async function promoteOnLeaving(shouldPromote,at) {
+async function promoteOnLeaving(shouldPromote,at,includeArmed=true) {
   const state=await read();
   let changed=false;
   for (const [id,candidate] of Object.entries(state.grace)) {
@@ -257,10 +257,28 @@ async function promoteOnLeaving(shouldPromote,at) {
     }
   }
   for (const [id,candidate] of Object.entries(state.testArmed)) {
-    if (!shouldPromote(Number(id),candidate)) continue;
+    if (!includeArmed || !shouldPromote(Number(id),candidate)) continue;
     delete state.testArmed[id];
     changed=true;
     await addAttention(state,Number(id),"manual");
+  }
+  if (!changed) return;
+  await save(state);
+  await setupAlarm(state);
+}
+async function promoteArmedAfterPopupCloses() {
+  const state=await read();
+  const focused=new Map();
+  let changed=false;
+  for (const [id,candidate] of Object.entries(state.testArmed)) {
+    if (!focused.has(candidate.windowId)) {
+      try { focused.set(candidate.windowId,(await chrome.windows.get(candidate.windowId)).focused); }
+      catch { focused.set(candidate.windowId,false); }
+    }
+    if (focused.get(candidate.windowId)) continue;
+    delete state.testArmed[id];
+    if (await getTab(id)) await addAttention(state,Number(id),"manual");
+    changed=true;
   }
   if (!changed) return;
   await save(state);
@@ -428,6 +446,14 @@ chrome.runtime.onMessage.addListener((message,sender,respond)=>{
   }).then(respond,error=>respond({ok:false,error:String(error?.message || error)}));
   return true;
 });
+chrome.runtime.onConnect.addListener(port=>{
+  if (port.name!=="blinka-popup" || port.sender.tab) return;
+  popupConnections++;
+  port.onDisconnect.addListener(()=>{
+    popupConnections=Math.max(0,popupConnections-1);
+    if (popupConnections===0) serial(promoteArmedAfterPopupCloses).catch(console.error);
+  });
+});
 chrome.alarms.onAlarm.addListener(alarm=>{
   if (alarm.name!==ALARM) return;
   serial(async()=>{
@@ -467,9 +493,10 @@ chrome.tabs.onActivated.addListener(({tabId,windowId})=>{
 });
 chrome.windows.onFocusChanged.addListener(windowId=>{
   const focusedAt=Date.now();
+  const popupOpenAtEvent=popupConnections>0;
   serial(async()=>{
     await markChatLeaving((_id,candidate)=>windowId===chrome.windows.WINDOW_ID_NONE || candidate.windowId!==windowId,focusedAt);
-    await promoteOnLeaving((_id,candidate)=>windowId===chrome.windows.WINDOW_ID_NONE || candidate.windowId!==windowId,focusedAt);
+    await promoteOnLeaving((_id,candidate)=>windowId===chrome.windows.WINDOW_ID_NONE || candidate.windowId!==windowId,focusedAt,!popupOpenAtEvent);
     if (windowId===chrome.windows.WINDOW_ID_NONE) return;
     const [tab]=await chrome.tabs.query({active:true,windowId});
     if (tab) await acknowledgeVisibleTab(tab.id,windowId);
