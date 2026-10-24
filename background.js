@@ -9,12 +9,29 @@ const GROUP_COLORS = ["grey","blue","red","yellow","green","pink","purple","cyan
 const IDLE_TITLE = "○⇨";
 const ACTIVE_TITLE = "●⇨";
 const GRACE_MS = 1000;
+const SIDEPANEL_QUIET_MS = 10000;
+const FAVICON_HISTORY_LIMIT = 60;
 let queue = Promise.resolve();
 let blinkTimer = null;
 let blinkTimerPeriod = null;
 let blinkTickPending = false;
+let pendingRetryTimer = null;
+let faviconTimer = null;
+let faviconTimerAt = null;
 let popupConnections = 0;
 function serial(fn) { const next=queue.then(fn); queue=next.catch(console.error); return next; }
+function tabStripBusy(error) {
+  return String(error?.message || error).includes("Tabs cannot be edited right now");
+}
+async function tryTabStripEdit(operation,retry=false) {
+  const delays=retry ? [0,100,250,500,1000] : [0];
+  for (const delay of delays) {
+    if (delay) await new Promise(resolve=>setTimeout(resolve,delay));
+    try { return {ok:true,value:await operation()}; }
+    catch (error) { if (!tabStripBusy(error)) throw error; }
+  }
+  return {ok:false};
+}
 
 function chatgptFaviconBadge(url) {
   if (typeof url!=="string" || !url.startsWith("data:image/svg+xml,")) return null;
@@ -36,6 +53,9 @@ function normalize(state) {
   state.chatMonitors ||= {};
   state.chatDiagnostics ||= {};
   state.signalErrors ||= {};
+  state.pendingAttention ||= {};
+  state.pendingUngroup ||= {};
+  state.faviconPending ||= {};
   // Äldre versioner återanvände Blinka-grupper. Nya signaler gör inte det.
   delete state.ownedGroups;
   return state;
@@ -62,6 +82,10 @@ async function syncChatScript() {
   if (enabled && permitted) {
     const tabs=await chrome.tabs.query({url:CHAT_ORIGIN});
     for (const tab of tabs) {
+      try {
+        const monitor=await chrome.tabs.sendMessage(tab.id,{type:"chatMonitorPing"});
+        if (typeof monitor?.stopVisible==="boolean") continue;
+      } catch { /* Ingen fungerande monitor i fliken. */ }
       try { await chrome.scripting.executeScript({target:{tabId:tab.id},files:["chatgpt-content.js"]}); } catch { /* Fliken kan vara under omladdning. */ }
     }
   } else {
@@ -125,13 +149,49 @@ function blinkTick() {
     await reconcile(state);
     await paint(state);
     await save(state);
-    await syncBlinkTimer(state);
-    if (!Object.keys(state.previews).length) await chrome.alarms.clear(ALARM);
+    await setupAlarm(state);
   }).catch(console.error).finally(()=>{ blinkTickPending=false; });
 }
 async function setupAlarm(state) {
   await syncBlinkTimer(state);
-  if (Object.keys(state.previews).length) {
+  const nextFaviconAt=Math.min(...Object.values(state.faviconPending).map(candidate=>candidate.at+SIDEPANEL_QUIET_MS));
+  if (Number.isFinite(nextFaviconAt) && faviconTimerAt!==nextFaviconAt) {
+    if (faviconTimer!==null) clearTimeout(faviconTimer);
+    faviconTimerAt=nextFaviconAt;
+    faviconTimer=setTimeout(()=>{
+      faviconTimer=null;
+      faviconTimerAt=null;
+      serial(async()=>{
+        const latest=await read();
+        await processFaviconPending(latest);
+        await save(latest);
+        await setupAlarm(latest);
+      }).catch(console.error);
+    },Math.max(0,nextFaviconAt-Date.now()));
+  } else if (!Number.isFinite(nextFaviconAt) && faviconTimer!==null) {
+    clearTimeout(faviconTimer);
+    faviconTimer=null;
+    faviconTimerAt=null;
+  }
+  const pending=Object.keys(state.pendingAttention).length>0 || Object.keys(state.pendingUngroup).length>0 ||
+    Object.keys(state.groups).some(id=>!Object.values(state.previews).some(preview=>preview.groupId===Number(id)));
+  if (pending && pendingRetryTimer===null) {
+    pendingRetryTimer=setTimeout(()=>{
+      pendingRetryTimer=null;
+      serial(async()=>{
+        const latest=await read();
+        await reconcile(latest);
+        await processPendingEdits(latest);
+        await paint(latest);
+        await save(latest);
+        await setupAlarm(latest);
+      }).catch(console.error);
+    },1000);
+  } else if (!pending && pendingRetryTimer!==null) {
+    clearTimeout(pendingRetryTimer);
+    pendingRetryTimer=null;
+  }
+  if (Object.keys(state.previews).length || pending || Number.isFinite(nextFaviconAt)) {
     if (!(await chrome.alarms.get(ALARM))) await chrome.alarms.create(ALARM,{periodInMinutes:0.5});
   }
   else await chrome.alarms.clear(ALARM);
@@ -171,9 +231,12 @@ async function reconcile(state) {
         const owned=state.ownedGroups[id];
         if (owned && group.title===owned.expectedTitle && owned.expectedTitle!==IDLE_TITLE) {
           update.title=IDLE_TITLE;
-          owned.expectedTitle=IDLE_TITLE;
         }
-        if (Object.keys(update).length) await chrome.tabGroups.update(Number(id),update);
+        if (Object.keys(update).length) {
+          const edited=await tryTabStripEdit(()=>chrome.tabGroups.update(Number(id),update));
+          if (!edited.ok) continue;
+          if (update.title) owned.expectedTitle=update.title;
+        }
       }
       delete state.groups[id];
     } else if (!(await getGroup(id))) delete state.groups[id];
@@ -203,25 +266,40 @@ async function paint(state) {
     }
     const color=record.expected===blinkColorA ? blinkColorB : blinkColorA;
     const update={color};
-    if (owned) {
-      owned.expectedTitle=owned.expectedTitle.startsWith("○") ? ACTIVE_TITLE : IDLE_TITLE;
-      update.title=owned.expectedTitle;
-    }
+    if (owned) update.title=owned.expectedTitle.startsWith("○") ? ACTIVE_TITLE : IDLE_TITLE;
+    const edited=await tryTabStripEdit(()=>chrome.tabGroups.update(Number(id),update));
+    if (!edited.ok) continue;
     record.expected=color;
-    await chrome.tabGroups.update(Number(id),update);
+    if (owned) owned.expectedTitle=update.title;
   }
 }
 async function addAttention(state,tabId,source) {
   await reconcile(state);
-  if (source==="manual" && Object.values(state.previews).some(preview=>preview.tabId===tabId && preview.source!=="favicon")) return state;
+  if (source==="manual" && Object.values(state.previews).some(preview=>preview.tabId===tabId && preview.source==="manual")) return state;
   const tab=await getTab(tabId);
   if (!tab) throw new Error("Fliken finns inte längre.");
   let groupId=Number.isInteger(tab.groupId) ? tab.groupId : -1;
   if (groupId<0) {
     try {
-      groupId=await chrome.tabs.group({tabIds:tabId,createProperties:{windowId:tab.windowId}});
-      await chrome.tabGroups.update(groupId,{title:IDLE_TITLE,color:"blue"});
-      state.ownedGroups[groupId]={tabId,windowId:tab.windowId,expectedTitle:IDLE_TITLE};
+      const edited=await tryTabStripEdit(async()=>{
+        const current=await getTab(tabId);
+        if (!current) throw new Error("Fliken finns inte längre.");
+        if (current.groupId>=0) return {groupId:current.groupId,created:false};
+        const createdId=await chrome.tabs.group({tabIds:tabId,createProperties:{windowId:current.windowId}});
+        return {groupId:createdId,created:true,windowId:current.windowId};
+      },true);
+      if (!edited.ok) {
+        state.pendingAttention[tabId]={source};
+        await save(state);
+        await setupAlarm(state);
+        return state;
+      }
+      groupId=edited.value.groupId;
+      if (edited.value.created) {
+        await tryTabStripEdit(()=>chrome.tabGroups.update(groupId,{title:IDLE_TITLE,color:"blue"}),true);
+        const createdGroup=await getGroup(groupId);
+        if (createdGroup) state.ownedGroups[groupId]={tabId,windowId:edited.value.windowId,expectedTitle:createdGroup.title};
+      }
     } catch (error) {
       state.signalErrors[tabId]={at:Date.now(),message:String(error?.message || error)};
       await save(state);
@@ -230,11 +308,15 @@ async function addAttention(state,tabId,source) {
   }
   const group=await getGroup(groupId);
   if (!group) throw new Error("Flikgruppen finns inte längre.");
+  delete state.pendingAttention[tabId];
   if (!state.groups[groupId]) state.groups[groupId]={baseColor:group.color,expected:group.color,paused:false};
   const id=crypto.randomUUID();
   state.previews[id]={id,tabId,groupId,source};
   await paint(state);
   delete state.signalErrors[tabId];
+  for (const [id,pending] of Object.entries(state.pendingUngroup)) {
+    if (pending.tabId===tabId) delete state.pendingUngroup[id];
+  }
   return state;
 }
 async function startPreview(tabId) {
@@ -251,31 +333,107 @@ async function cancelPreview(tabId) {
   await save(state);
   return state;
 }
-async function acknowledgeTab(tabId) {
-  const state=await read();
-  let changed=Boolean(state.grace[tabId]);
-  delete state.grace[tabId];
-  for (const [id,job] of Object.entries(state.previews)) {
-    if (job.tabId!==tabId) continue;
-    delete state.previews[id];
-    changed=true;
-  }
-  await reconcile(state);
+async function cleanupOwnedGroup(state,tabId) {
+  let changed=false;
   const tab=await getTab(tabId);
   if (tab?.groupId>=0) {
     const owned=state.ownedGroups[tab.groupId];
     if (owned?.tabId===tabId && !Object.values(state.previews).some(preview=>preview.groupId===tab.groupId)) {
       const members=await chrome.tabs.query({groupId:tab.groupId});
       if (members.length===1 && members[0].id===tabId) {
-        await chrome.tabs.ungroup(tabId);
-        delete state.ownedGroups[tab.groupId];
+        const edited=state.groups[tab.groupId] ? {ok:false} :
+          await tryTabStripEdit(()=>chrome.tabs.ungroup(tabId),true);
+        if (edited.ok) {
+          delete state.ownedGroups[tab.groupId];
+          delete state.pendingUngroup[tab.groupId];
+        } else {
+          state.pendingUngroup[tab.groupId]={tabId,windowId:tab.windowId};
+        }
         changed=true;
       }
     }
   }
+  return changed;
+}
+async function cancelQuietAttention(state,tabId) {
+  let changed=false;
+  if (state.pendingAttention[tabId]?.source==="favicon-quiet") {
+    delete state.pendingAttention[tabId];
+    changed=true;
+  }
+  for (const [id,job] of Object.entries(state.previews)) {
+    if (job.tabId!==tabId || job.source!=="favicon-quiet") continue;
+    delete state.previews[id];
+    changed=true;
+  }
+  if (changed) {
+    await reconcile(state);
+    await cleanupOwnedGroup(state,tabId);
+  }
+  return changed;
+}
+async function acknowledgeTab(tabId) {
+  const state=await read();
+  let changed=Boolean(state.grace[tabId] || state.faviconPending[tabId] || state.pendingAttention[tabId]);
+  delete state.grace[tabId];
+  delete state.faviconPending[tabId];
+  delete state.pendingAttention[tabId];
+  for (const [id,job] of Object.entries(state.previews)) {
+    if (job.tabId!==tabId) continue;
+    delete state.previews[id];
+    changed=true;
+  }
+  await reconcile(state);
+  changed=(await cleanupOwnedGroup(state,tabId)) || changed;
   if (!changed) return;
   await save(state);
   await setupAlarm(state);
+}
+async function processPendingEdits(state) {
+  for (const [id,pending] of Object.entries(state.pendingAttention)) {
+    const tab=await getTab(id);
+    if (!tab) { delete state.pendingAttention[id]; continue; }
+    let visible=false;
+    if (tab.active) {
+      try { visible=(await chrome.windows.get(tab.windowId)).focused; } catch { /* Fönstret kan ha stängts. */ }
+    }
+    if (visible) { delete state.pendingAttention[id]; continue; }
+    delete state.pendingAttention[id];
+    await addAttention(state,Number(id),pending.source);
+  }
+  for (const [id,pending] of Object.entries(state.pendingUngroup)) {
+    const owned=state.ownedGroups[id];
+    const [group,tab]=await Promise.all([getGroup(id),getTab(pending.tabId)]);
+    if (!owned || owned.tabId!==pending.tabId || !group || !tab || tab.groupId!==Number(id) ||
+        group.windowId!==pending.windowId || group.title!==owned.expectedTitle ||
+        Object.values(state.previews).some(preview=>preview.groupId===Number(id))) {
+      delete state.pendingUngroup[id];
+      continue;
+    }
+    if (state.groups[id]) continue; // Återställ först den ursprungliga färgen.
+    const members=await chrome.tabs.query({groupId:Number(id)});
+    if (members.length!==1 || members[0].id!==pending.tabId) { delete state.pendingUngroup[id]; continue; }
+    const edited=await tryTabStripEdit(()=>chrome.tabs.ungroup(pending.tabId));
+    if (edited.ok) {
+      delete state.pendingUngroup[id];
+      delete state.ownedGroups[id];
+    }
+  }
+}
+async function processFaviconPending(state) {
+  const enabled=(await settings()).sidePanelEnabled;
+  for (const [id,candidate] of Object.entries(state.faviconPending)) {
+    if (Date.now()-candidate.at<SIDEPANEL_QUIET_MS) continue;
+    delete state.faviconPending[id];
+    if (!enabled || !candidate.eligible || state.tabs[id]?.current!==null) continue;
+    const tab=await getTab(id);
+    if (!tab || chatgptFaviconBadge(tab.favIconUrl)!==null) continue;
+    let visible=false;
+    if (tab.active) {
+      try { visible=(await chrome.windows.get(tab.windowId)).focused; } catch { /* Fönstret kan ha stängts. */ }
+    }
+    if (!visible) await addAttention(state,Number(id),"favicon-quiet");
+  }
 }
 async function acknowledgeVisibleTab(tabId,windowId) {
   const window=await chrome.windows.get(windowId);
@@ -294,6 +452,12 @@ function recheckVisibleTabSoon(windowId) {
 async function promoteOnLeaving(shouldPromote,at,includeArmed=true) {
   const state=await read();
   let changed=false;
+  if (includeArmed) for (const [id,candidate] of Object.entries(state.faviconPending)) {
+    if (!candidate.visibleAtStart || !shouldPromote(Number(id),candidate)) continue;
+    if (at>=candidate.at && at-candidate.at<GRACE_MS) candidate.eligible=true;
+    else delete state.faviconPending[id];
+    changed=true;
+  }
   for (const [id,candidate] of Object.entries(state.grace)) {
     if (!shouldPromote(Number(id),candidate)) continue;
     delete state.grace[id];
@@ -353,9 +517,25 @@ async function recordFavicon(tabId,url,observedAt,observedTab,focusedAtEvent) {
     at:Date.now(),
     lastBadge:badge || prior?.lastBadge || null,
     lastBadgeAt:badge ? Date.now() : prior?.lastBadgeAt || null,
+    history:[...(Array.isArray(prior?.history) ? prior.history : []),{at:observedAt,badge}].slice(-FAVICON_HISTORY_LIMIT),
   };
-  if (badge!==null) delete state.grace[tabId];
+  if (badge!==null) {
+    delete state.grace[tabId];
+    delete state.faviconPending[tabId];
+  }
+  if (badge==="active") await cancelQuietAttention(state,tabId);
+  // Ett släppt arbetslås kan ge active → ingen mitt under samma körning.
+  // Vänta därför på ett sammanhängande uppehåll innan en osäker kontrollsignal.
   if (prior?.current==="active" && badge===null) {
+    const tab=await getTab(tabId);
+    if (tab) {
+      const windowId=observedTab?.windowId ?? tab.windowId;
+      const wasFocused=focusedAtEvent == null ? (await chrome.windows.get(windowId)).focused : await focusedAtEvent;
+      const visibleAtStart=(observedTab?.active ?? tab.active) && wasFocused;
+      state.faviconPending[tabId]={at:observedAt,windowId,visibleAtStart,eligible:!visibleAtStart};
+    }
+  }
+  if (badge==="deliverable" || badge==="handoff") {
     const tab=await getTab(tabId);
     if (tab) {
       const windowId=observedTab?.windowId ?? tab.windowId;
@@ -364,11 +544,11 @@ async function recordFavicon(tabId,url,observedAt,observedTab,focusedAtEvent) {
         state.grace[tabId]={at:observedAt,windowId,source:"favicon"};
       } else {
         await addAttention(state,tabId,"favicon");
-        await setupAlarm(state);
       }
     }
   }
   await save(state);
+  await setupAlarm(state);
 }
 async function recordChatRun(message,sender) {
   if (!(await settings()).chatTabsEnabled || sender.frameId!==0 || !isChatTab(sender.url) || !sender.tab?.id) return;
@@ -445,6 +625,8 @@ async function markChatLeaving(shouldMark,at) {
 async function refreshState() {
   const state=await read();
   await reconcile(state);
+  await processFaviconPending(state);
+  await processPendingEdits(state);
   await save(state);
   await setupAlarm(state);
   return state;
@@ -477,6 +659,15 @@ chrome.runtime.onMessage.addListener((message,sender,respond)=>{
       if (message.key==="chatTabsEnabled" && message.value && !(await chrome.permissions.contains({origins:[CHAT_ORIGIN]}))) throw new Error("Ge först åtkomst till chatgpt.com.");
       const next={...await settings(),[message.key]:message.value};
       await chrome.storage.local.set({[SETTINGS_KEY]:next});
+      if (message.key==="sidePanelEnabled" && !message.value) {
+        const state=await read();
+        state.faviconPending={};
+        for (const [id,candidate] of Object.entries(state.grace)) {
+          if (candidate.source==="favicon") delete state.grace[id];
+        }
+        await save(state);
+        await setupAlarm(state);
+      }
       if (message.key==="chatTabsEnabled") {
         const state=await read();
         if (!message.value) { state.chatRuns={}; state.chatMonitors={}; }
@@ -505,6 +696,8 @@ chrome.alarms.onAlarm.addListener(alarm=>{
   serial(async()=>{
     const state=await read();
     await reconcile(state);
+    await processFaviconPending(state);
+    await processPendingEdits(state);
     await paint(state);
     await save(state);
     await setupAlarm(state);
@@ -513,11 +706,14 @@ chrome.alarms.onAlarm.addListener(alarm=>{
 chrome.tabs.onUpdated.addListener((tabId,change,tab)=>{
   if (change.status==="loading") serial(async()=>{
     const state=await read();
+    delete state.faviconPending[tabId];
+    if (state.tabs[tabId]) state.tabs[tabId].current=null;
     delete state.chatRuns[tabId];
     delete state.chatMonitors[tabId];
     delete state.chatDiagnostics[tabId];
     delete state.signalErrors[tabId];
     await save(state);
+    await setupAlarm(state);
   });
   if (change.favIconUrl!==undefined && !isChatTab(tab?.url)) {
     const observedAt=Date.now();
@@ -552,12 +748,17 @@ chrome.windows.onFocusChanged.addListener(windowId=>{
 chrome.tabs.onRemoved.addListener(tabId=>serial(async()=>{
   const state=await read();
   delete state.tabs[tabId];
+  delete state.faviconPending[tabId];
   delete state.grace[tabId];
   delete state.testArmed[tabId];
   delete state.chatRuns[tabId];
   delete state.chatMonitors[tabId];
   delete state.chatDiagnostics[tabId];
   delete state.signalErrors[tabId];
+  delete state.pendingAttention[tabId];
+  for (const [id,pending] of Object.entries(state.pendingUngroup)) {
+    if (pending.tabId===tabId) delete state.pendingUngroup[id];
+  }
   await reconcile(state);
   await save(state);
   await setupAlarm(state);

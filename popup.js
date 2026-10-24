@@ -48,10 +48,19 @@ async function refresh() {
       : `Nu: ${names[favicon.current] || "ingen"}. Senast: ${names[favicon.lastBadge]} ${new Date(favicon.lastBadgeAt).toLocaleTimeString()}.`;
   $("faviconNote").textContent=chatTab
     ? `${state.signalErrors?.[tab.id] ? `Gruppfel: ${state.signalErrors[tab.id].message}. ` : ""}${state.chatDiagnostics?.[tab.id] ? `Senast: ${state.chatDiagnostics[tab.id].status} ${new Date(state.chatDiagnostics[tab.id].at).toLocaleTimeString()}. ` : ""}När Stoppa försvinner kan tråden behöva kontrolleras. Det bevisar inte att svaret är färdigt.`
-    : "Märket kan också försvinna vid avbrott eller när ChatGPT släpper fliken. Kontrollera resultatet i sidopanelen.";
+    : "Resultat eller överlämning ger signal direkt. Om aktiv-märket försvinner väntar Blinka 10 sekunder utan märke innan en osäker kontrollsignal. Om aktiv återkommer upphör reservsignalen. Ett längre uppehåll bevisar inte att jobbet är klart.";
+  const history=Array.isArray(favicon?.history) ? favicon.history : [];
+  $("faviconHistoryDetails").hidden=chatTab || history.length===0;
+  $("faviconHistory").textContent=history.slice().reverse().map(entry=>{
+    const date=new Date(entry.at);
+    const time=[date.getHours(),date.getMinutes(),date.getSeconds()].map(part=>String(part).padStart(2,"0")).join(":")+
+      `.${String(date.getMilliseconds()).padStart(3,"0")}`;
+    return `${names[entry.badge] || "inget ChatGPT-märke"}  ${time}`;
+  }).join("\n");
   const jobs=Object.values(state.previews).filter(item=>item.tabId===tab?.id);
-  const manual=jobs.find(item=>item.source!=="favicon");
+  const manual=jobs.find(item=>item.source==="manual");
   const armed=Boolean(state.testArmed?.[tab?.id]);
+  const pending=Boolean(state.pendingAttention?.[tab?.id]);
   $("preview").disabled=tab?.id == null || Boolean(manual);
   $("preview").textContent=armed ? "Avbryt testsignal" : "Förbered manuell testsignal";
   $("preview").onclick=()=>run(()=>send({type:armed ? "cancelPreview" : "preview",tabId:tab.id}));
@@ -61,6 +70,7 @@ async function refresh() {
   $("previewStatus").textContent=jobs.length
     ? group?.paused ? "Färgväxlingen pausades efter en annan färgändring." : group ? "Den här fliken har en väntande signal. Välj en annan flik och kom tillbaka för att kvittera." : "Fliken har lämnat den signalerande gruppen."
     : armed ? "Testsignalen startar när du lämnar fliken. Välj tillbaka för att stoppa den."
+    : pending ? "Chrome tillåter inte gruppändring just nu. Blinka provar igen när fliken går att ändra."
     : tab?.groupId<0 ? "Fliken saknar grupp. Blinka skapar en när fliken behöver uppmärksamhet."
     : "Ingen väntande signal på denna flik.";
   const groupJobs=Object.values(state.previews).filter(item=>item.groupId===tab?.groupId);

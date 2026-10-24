@@ -25,9 +25,10 @@
   #blinkSpeed{vertical-align:middle;width:170px}
   .muted{color:#536070}
   #error{color:#a21d1d;white-space:pre-wrap}
+  #faviconHistory{max-height:190px;overflow:auto;white-space:pre-wrap;font:12px ui-monospace,monospace}
 </style>
 <h1>Blinka</h1>
-<p class="muted">Blinka signalerar när ChatGPT slutar arbeta på en flik som du inte ser. En synlig flik ger normalt ingen signal. Vid behov skapas en Blinka-grupp.</p>
+<p class="muted">Blinka signalerar när ChatGPT markerar en dold arbetsflik för resultat eller överlämning, eller när genereringen slutar i en bevakad ChatGPT-flik. Vid behov skapas en Blinka-grupp.</p>
 <p id="tab"></p>
 <h2>Bevakning</h2>
 <label><input type="checkbox" id="sidePanelEnabled"> ChatGPTs sidopanel på webbsidor</label><br>
@@ -49,6 +50,7 @@
 <h2>Aktivitetsprov</h2>
 <p id="faviconProbe"></p>
 <p id="faviconNote" class="muted"></p>
+<details id="faviconHistoryDetails"><summary>Ikonlogg för den här fliken</summary><pre id="faviconHistory"></pre></details>
 <h2>Uppmärksamhetssignal</h2>
 <p class="muted">Testknappen förbereder en färgsignal. Den startar när du lämnar fliken och slutar när du väljer tillbaka den. Blinka skapar en grupp om fliken saknar grupp.</p>
 <button id="preview">Förbered manuell testsignal</button>
