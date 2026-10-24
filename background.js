@@ -99,11 +99,12 @@ function isChatTab(url) {
   try { return new URL(url).origin==="https://chatgpt.com"; } catch { return false; }
 }
 async function read() {
-  const [stored,owned]=await Promise.all([chrome.storage.local.get([KEY,LEGACY_KEY]),chrome.storage.session.get(OWNED_KEY)]);
+  const [stored,sessionOwned]=await Promise.all([chrome.storage.local.get([KEY,LEGACY_KEY,OWNED_KEY]),chrome.storage.session.get(OWNED_KEY)]);
+  const owned=stored[OWNED_KEY] || sessionOwned[OWNED_KEY] || {};
   const old=stored[LEGACY_KEY];
   if (!old && stored[KEY]) {
     const state=normalize(stored[KEY]);
-    state.ownedGroups=owned[OWNED_KEY] || {};
+    state.ownedGroups=owned;
     return state;
   }
   for (const [id,record] of Object.entries(old?.groups || {})) {
@@ -115,7 +116,7 @@ async function read() {
   }
   await chrome.alarms.clear(ALARM);
   const state=normalize(stored[KEY] || {tabs:old?.probes?.faviconTabs || {}});
-  state.ownedGroups=owned[OWNED_KEY] || {};
+  state.ownedGroups=owned;
   await save(state);
   if (old) await chrome.storage.local.remove(LEGACY_KEY);
   return state;
@@ -123,8 +124,8 @@ async function read() {
 async function save(state) {
   const persistent={...state};
   delete persistent.ownedGroups;
-  await chrome.storage.local.set({[KEY]:persistent});
-  await chrome.storage.session.set({[OWNED_KEY]:state.ownedGroups || {}});
+  await chrome.storage.local.set({[KEY]:persistent,[OWNED_KEY]:state.ownedGroups || {}});
+  await chrome.storage.session.remove(OWNED_KEY);
 }
 async function getTab(id) { try { return await chrome.tabs.get(Number(id)); } catch { return null; } }
 async function getGroup(id) { try { return await chrome.tabGroups.get(Number(id)); } catch { return null; } }

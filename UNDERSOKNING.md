@@ -32,6 +32,8 @@ Användarens första prov med 0.24.x gav ikonloggen `aktiv → inget ChatGPT-mä
 
 Version 0.25.1 avbryter också en redan startad tidsbaserad reservsignal när `active` återkommer. Den signalen har egen källtyp (`favicon-quiet`) så att Blinka bara tar bort osäkra reservsignaler för samma flik. Manuella signaler, signaler från vanliga ChatGPT-flikar och explicita `deliverable`/`handoff` påverkas inte. Efter borttagning återställs gruppfärgen när inga andra signaler finns kvar; en ensam grupp som Blinka äger avgrupperas med samma säkerhetskontroller som vid vanlig kvittering.
 
+Version 0.25.2 flyttar ägarposterna för Blinka-skapade grupper från `chrome.storage.session` till `chrome.storage.local`. Befintliga poster i sessionen migreras när tillståndet sparas. Det gör att Blinka kan känna igen egna grupper även efter omstart eller tilläggsomladdning. Vid kontroll av flik 1817061872 syntes en ensam grupp med vilotiteln `○⇨`, men ägarposten kunde inte läsas ut ur Chrome-sessionen. Den exakta orsaken till att just den gruppen blev kvar är därför inte verifierad. Koden avgrupperar bara när en matchande ägarpost finns, gruppen är ensam och ingen signal återstår; att gissa ägarskap enbart från titeln vore osäkert. En redan förlorad ägarpost kan inte återskapas säkert av ändringen.
+
 ## Verifierat
 
 - Sidopanelen består av en tilläggssida som visar `chatgpt.com` i en inbäddad ram. Blinkas gamla innehållsskript nådde vanliga ChatGPT-flikar men gav ingen träff i sidopanelens iframe, trots att panelen var öppen. Det visar utebliven åtkomst i den provade konfigurationen, inte ett allmänt förbud. Iframe-proben är borttagen.
