@@ -4,6 +4,7 @@ const SETTINGS_KEY = "blinkaSettingsV1";
 const OWNED_KEY = "blinkaOwnedGroupsV1";
 const CHAT_SCRIPT_ID = "blinka-chatgpt-tab";
 const CHAT_ORIGIN = "https://chatgpt.com/*";
+const RELIGHT_MENU_ID = "blinka-relight-tab";
 const ALARM = "blinkaColorTick";
 const GROUP_COLORS = ["grey","blue","red","yellow","green","pink","purple","cyan","orange"];
 const IDLE_TITLE = "○⇨";
@@ -206,16 +207,19 @@ async function reconcile(state) {
       delete state.previews[id];
       continue;
     }
+    let visible=false;
     if (tab.active) {
       if (!windowFocus.has(tab.windowId)) {
         let focused=false;
         try { focused=(await chrome.windows.get(tab.windowId)).focused; } catch { /* Fönstret kan ha stängts. */ }
         windowFocus.set(tab.windowId,focused);
       }
-      if (windowFocus.get(tab.windowId)) {
-        delete state.previews[id];
-        continue;
-      }
+      visible=windowFocus.get(tab.windowId);
+    }
+    if (preview.deferVisibleAck && !visible && (!tab.active || popupConnections===0)) preview.deferVisibleAck=false;
+    if (visible && !preview.deferVisibleAck) {
+      delete state.previews[id];
+      continue;
     }
     preview.groupId=tab.groupId;
     if (!state.groups[tab.groupId]) {
@@ -274,11 +278,20 @@ async function paint(state) {
     if (owned) owned.expectedTitle=update.title;
   }
 }
-async function addAttention(state,tabId,source) {
+async function addAttention(state,tabId,source,deferVisibleAck=false) {
   await reconcile(state);
-  if (source==="manual" && Object.values(state.previews).some(preview=>preview.tabId===tabId && preview.source==="manual")) return state;
   const tab=await getTab(tabId);
   if (!tab) throw new Error("Fliken finns inte längre.");
+  if (source==="manual") {
+    const existing=Object.values(state.previews).find(preview=>preview.tabId===tabId && preview.source==="manual");
+    if (existing) {
+      if (deferVisibleAck) {
+        existing.deferVisibleAck=true;
+        existing.windowId=tab.windowId;
+      }
+      return state;
+    }
+  }
   let groupId=Number.isInteger(tab.groupId) ? tab.groupId : -1;
   if (groupId<0) {
     try {
@@ -290,7 +303,7 @@ async function addAttention(state,tabId,source) {
         return {groupId:createdId,created:true,windowId:current.windowId};
       },true);
       if (!edited.ok) {
-        state.pendingAttention[tabId]={source};
+        state.pendingAttention[tabId]={source,deferVisibleAck,windowId:tab.windowId};
         await save(state);
         await setupAlarm(state);
         return state;
@@ -312,7 +325,7 @@ async function addAttention(state,tabId,source) {
   delete state.pendingAttention[tabId];
   if (!state.groups[groupId]) state.groups[groupId]={baseColor:group.color,expected:group.color,paused:false};
   const id=crypto.randomUUID();
-  state.previews[id]={id,tabId,groupId,source};
+  state.previews[id]={id,tabId,groupId,source,deferVisibleAck,windowId:tab.windowId};
   await paint(state);
   delete state.signalErrors[tabId];
   for (const [id,pending] of Object.entries(state.pendingUngroup)) {
@@ -327,6 +340,18 @@ async function startPreview(tabId) {
   state.testArmed[tabId]={windowId:tab.windowId};
   await save(state);
   return state;
+}
+async function relightTab(tabId) {
+  const state=await read();
+  const tab=await getTab(tabId);
+  if (!tab) return;
+  let visible=false;
+  if (tab.active) {
+    try { visible=(await chrome.windows.get(tab.windowId)).focused; } catch { /* Fönstret kan ha stängts. */ }
+  }
+  await addAttention(state,tabId,"manual",visible);
+  await save(state);
+  await setupAlarm(state);
 }
 async function cancelPreview(tabId) {
   const state=await read();
@@ -375,12 +400,13 @@ async function cancelQuietAttention(state,tabId) {
 }
 async function acknowledgeTab(tabId) {
   const state=await read();
-  let changed=Boolean(state.grace[tabId] || state.faviconPending[tabId] || state.pendingAttention[tabId]);
+  const pending=state.pendingAttention[tabId];
+  let changed=Boolean(state.grace[tabId] || state.faviconPending[tabId] || (pending && !pending.deferVisibleAck));
   delete state.grace[tabId];
   delete state.faviconPending[tabId];
-  delete state.pendingAttention[tabId];
+  if (!pending?.deferVisibleAck) delete state.pendingAttention[tabId];
   for (const [id,job] of Object.entries(state.previews)) {
-    if (job.tabId!==tabId) continue;
+    if (job.tabId!==tabId || job.deferVisibleAck) continue;
     delete state.previews[id];
     changed=true;
   }
@@ -398,9 +424,9 @@ async function processPendingEdits(state) {
     if (tab.active) {
       try { visible=(await chrome.windows.get(tab.windowId)).focused; } catch { /* Fönstret kan ha stängts. */ }
     }
-    if (visible) { delete state.pendingAttention[id]; continue; }
+    if (visible && !pending.deferVisibleAck) { delete state.pendingAttention[id]; continue; }
     delete state.pendingAttention[id];
-    await addAttention(state,Number(id),pending.source);
+    await addAttention(state,Number(id),pending.source,Boolean(pending.deferVisibleAck && visible));
   }
   for (const [id,pending] of Object.entries(state.pendingUngroup)) {
     const owned=state.ownedGroups[id];
@@ -453,6 +479,16 @@ function recheckVisibleTabSoon(windowId) {
 async function promoteOnLeaving(shouldPromote,at,includeArmed=true) {
   const state=await read();
   let changed=false;
+  if (includeArmed) for (const preview of Object.values(state.previews)) {
+    if (!preview.deferVisibleAck || !shouldPromote(preview.tabId,preview)) continue;
+    preview.deferVisibleAck=false;
+    changed=true;
+  }
+  if (includeArmed) for (const [id,pending] of Object.entries(state.pendingAttention)) {
+    if (!pending.deferVisibleAck || !shouldPromote(Number(id),pending)) continue;
+    pending.deferVisibleAck=false;
+    changed=true;
+  }
   if (includeArmed) for (const [id,candidate] of Object.entries(state.faviconPending)) {
     if (!candidate.visibleAtStart || !shouldPromote(Number(id),candidate)) continue;
     if (at>=candidate.at && at-candidate.at<GRACE_MS) candidate.eligible=true;
@@ -692,6 +728,10 @@ chrome.runtime.onConnect.addListener(port=>{
     if (popupConnections===0) serial(promoteArmedAfterPopupCloses).catch(console.error);
   });
 });
+chrome.contextMenus.onClicked.addListener((info,tab)=>{
+  if (info.menuItemId!==RELIGHT_MENU_ID || tab?.id==null) return;
+  serial(()=>relightTab(tab.id)).catch(console.error);
+});
 chrome.alarms.onAlarm.addListener(alarm=>{
   if (alarm.name!==ALARM) return;
   serial(async()=>{
@@ -796,6 +836,11 @@ chrome.permissions.onRemoved.addListener(()=>serial(async()=>{
     await syncChatScript();
   }
 }));
-chrome.runtime.onInstalled.addListener(()=>serial(async()=>{ await refreshState(); await syncChatScript(); }));
+chrome.runtime.onInstalled.addListener(()=>serial(async()=>{
+  await chrome.contextMenus.removeAll();
+  chrome.contextMenus.create({id:RELIGHT_MENU_ID,title:"Tänd Blinka för fliken",contexts:["tab"]});
+  await refreshState();
+  await syncChatScript();
+}));
 chrome.runtime.onStartup.addListener(()=>serial(async()=>{ await refreshState(); await syncChatScript(); }));
 serial(async()=>{ await refreshState(); await syncChatScript(); }).catch(console.error);
