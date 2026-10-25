@@ -36,6 +36,8 @@ Version 0.25.2 flyttar ägarposterna för Blinka-skapade grupper från `chrome.s
 
 Version 0.26.0 lägger till **Tänd Blinka för fliken** i Chromes flikmeny. Menyhändelsen ger den högerklickade flikens ID; Blinka använder alltså inte den för tillfället aktiva fliken som gissning. Signalen startar direkt även om målfliken är aktiv. För just denna manuella återtändning hoppar den regelbundna synlighetskontrollen över kvittering tills fliken eller Chrome först har lämnats; nästa återkomst kvitterar som vanligt. En redan dold flik signalerar direkt och kvitteras vid nästa återkomst. Signalen använder samma grupp och färgväxling som övriga manuella signaler. Menyvalet läser inget sidinnehåll och fungerar oberoende av ChatGPT-bevakningens två reglage.
 
+Version 0.26.1 hanterar Chromes `No window with id: ...` när ett fönster hinner stängas eller en flik flyttas mellan en flik- eller fokushändelse och Blinkas uppföljande API-anrop. Fokuskontroller behandlar just ett försvunnet fönster som inte fokuserat, och omkontrollen av aktiv flik avbryts när dess fönster inte längre finns. Andra API-fel fortsätter att rapporteras. Lokala simulerade Chrome-svar verifierar dessa vägar; den exakta händelsekedjan bakom användarens tidigare fel är inte känd.
+
 ## Verifierat
 
 - Sidopanelen består av en tilläggssida som visar `chatgpt.com` i en inbäddad ram. Blinkas gamla innehållsskript nådde vanliga ChatGPT-flikar men gav ingen träff i sidopanelens iframe, trots att panelen var öppen. Det visar utebliven åtkomst i den provade konfigurationen, inte ett allmänt förbud. Iframe-proben är borttagen.

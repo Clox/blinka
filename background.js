@@ -24,12 +24,26 @@ function serial(fn) { const next=queue.then(fn); queue=next.catch(console.error)
 function tabStripBusy(error) {
   return String(error?.message || error).includes("Tabs cannot be edited right now");
 }
+function missingWindow(error) {
+  return String(error?.message || error).includes("No window with id:");
+}
+async function windowFocused(windowId) {
+  try { return Boolean((await chrome.windows.get(windowId)).focused); }
+  catch (error) { if (missingWindow(error)) return false; throw error; }
+}
+async function activeTabInWindow(windowId) {
+  try { return (await chrome.tabs.query({active:true,windowId}))[0] || null; }
+  catch (error) { if (missingWindow(error)) return null; throw error; }
+}
 async function tryTabStripEdit(operation,retry=false) {
   const delays=retry ? [0,100,250,500,1000] : [0];
   for (const delay of delays) {
     if (delay) await new Promise(resolve=>setTimeout(resolve,delay));
     try { return {ok:true,value:await operation()}; }
-    catch (error) { if (!tabStripBusy(error)) throw error; }
+    catch (error) {
+      if (missingWindow(error)) return {ok:false};
+      if (!tabStripBusy(error)) throw error;
+    }
   }
   return {ok:false};
 }
@@ -210,9 +224,7 @@ async function reconcile(state) {
     let visible=false;
     if (tab.active) {
       if (!windowFocus.has(tab.windowId)) {
-        let focused=false;
-        try { focused=(await chrome.windows.get(tab.windowId)).focused; } catch { /* Fönstret kan ha stängts. */ }
-        windowFocus.set(tab.windowId,focused);
+        windowFocus.set(tab.windowId,await windowFocused(tab.windowId));
       }
       visible=windowFocus.get(tab.windowId);
     }
@@ -347,7 +359,7 @@ async function relightTab(tabId) {
   if (!tab) return;
   let visible=false;
   if (tab.active) {
-    try { visible=(await chrome.windows.get(tab.windowId)).focused; } catch { /* Fönstret kan ha stängts. */ }
+    visible=await windowFocused(tab.windowId);
   }
   await addAttention(state,tabId,"manual",visible);
   await save(state);
@@ -422,7 +434,7 @@ async function processPendingEdits(state) {
     if (!tab) { delete state.pendingAttention[id]; continue; }
     let visible=false;
     if (tab.active) {
-      try { visible=(await chrome.windows.get(tab.windowId)).focused; } catch { /* Fönstret kan ha stängts. */ }
+      visible=await windowFocused(tab.windowId);
     }
     if (visible && !pending.deferVisibleAck) { delete state.pendingAttention[id]; continue; }
     delete state.pendingAttention[id];
@@ -457,21 +469,20 @@ async function processFaviconPending(state) {
     if (!tab || chatgptFaviconBadge(tab.favIconUrl)!==null) continue;
     let visible=false;
     if (tab.active) {
-      try { visible=(await chrome.windows.get(tab.windowId)).focused; } catch { /* Fönstret kan ha stängts. */ }
+      visible=await windowFocused(tab.windowId);
     }
     if (!visible) await addAttention(state,Number(id),"favicon-quiet");
   }
 }
 async function acknowledgeVisibleTab(tabId,windowId) {
-  const window=await chrome.windows.get(windowId);
-  if (!window.focused) return;
+  if (!(await windowFocused(windowId))) return;
   const tab=await getTab(tabId);
   if (tab?.windowId===windowId && tab.active) await acknowledgeTab(tabId);
 }
 function recheckVisibleTabSoon(windowId) {
   setTimeout(()=>{
     serial(async()=>{
-      const [tab]=await chrome.tabs.query({active:true,windowId});
+      const tab=await activeTabInWindow(windowId);
       if (tab) await acknowledgeVisibleTab(tab.id,windowId);
     }).catch(console.error);
   },250);
@@ -519,8 +530,7 @@ async function promoteArmedAfterPopupCloses() {
   let changed=false;
   for (const [id,candidate] of Object.entries(state.testArmed)) {
     if (!focused.has(candidate.windowId)) {
-      try { focused.set(candidate.windowId,(await chrome.windows.get(candidate.windowId)).focused); }
-      catch { focused.set(candidate.windowId,false); }
+      focused.set(candidate.windowId,await windowFocused(candidate.windowId));
     }
     if (focused.get(candidate.windowId)) continue;
     delete state.testArmed[id];
@@ -567,7 +577,7 @@ async function recordFavicon(tabId,url,observedAt,observedTab,focusedAtEvent) {
     const tab=await getTab(tabId);
     if (tab) {
       const windowId=observedTab?.windowId ?? tab.windowId;
-      const wasFocused=focusedAtEvent == null ? (await chrome.windows.get(windowId)).focused : await focusedAtEvent;
+      const wasFocused=focusedAtEvent == null ? await windowFocused(windowId) : await focusedAtEvent;
       const visibleAtStart=(observedTab?.active ?? tab.active) && wasFocused;
       state.faviconPending[tabId]={at:observedAt,windowId,visibleAtStart,eligible:!visibleAtStart};
     }
@@ -576,7 +586,7 @@ async function recordFavicon(tabId,url,observedAt,observedTab,focusedAtEvent) {
     const tab=await getTab(tabId);
     if (tab) {
       const windowId=observedTab?.windowId ?? tab.windowId;
-      const wasFocused=focusedAtEvent == null ? (await chrome.windows.get(windowId)).focused : await focusedAtEvent;
+      const wasFocused=focusedAtEvent == null ? await windowFocused(windowId) : await focusedAtEvent;
       if ((observedTab?.active ?? tab.active) && wasFocused) {
         state.grace[tabId]={at:observedAt,windowId,source:"favicon"};
       } else {
@@ -616,7 +626,7 @@ async function recordChatRun(message,sender) {
   if (message.type==="chatRunDisappeared") {
     const tab=await getTab(tabId);
     if (!tab) return;
-    const focused=(await chrome.windows.get(tab.windowId)).focused;
+    const focused=await windowFocused(tab.windowId);
     run.disappeared={at:Date.now(),wasVisible:tab.active && focused,windowId:tab.windowId};
     state.chatDiagnostics[tabId]={status:"Stoppa försvann",at:Date.now()};
     await save(state);
@@ -628,7 +638,7 @@ async function recordChatRun(message,sender) {
   const tab=await getTab(tabId);
   let outcome="Ingen signal";
   if (tab) {
-    const focused=(await chrome.windows.get(tab.windowId)).focused;
+    const focused=await windowFocused(tab.windowId);
     const visible=tab.active && focused;
     if (disappeared.wasVisible) {
       if (visible) {
@@ -759,8 +769,7 @@ chrome.tabs.onUpdated.addListener((tabId,change,tab)=>{
   if (change.favIconUrl!==undefined && !isChatTab(tab?.url)) {
     const observedAt=Date.now();
     const observedTab=tab && {active:tab.active,windowId:tab.windowId,url:tab.url};
-    const focusedAtEvent=observedTab?.windowId == null ? null
-      : chrome.windows.get(observedTab.windowId).then(window=>window.focused,()=>false);
+    const focusedAtEvent=observedTab?.windowId == null ? null : windowFocused(observedTab.windowId);
     serial(()=>recordFavicon(tabId,change.favIconUrl,observedAt,observedTab,focusedAtEvent));
   }
   if (change.groupId!==undefined) serial(()=>refreshState());
@@ -781,7 +790,7 @@ chrome.windows.onFocusChanged.addListener(windowId=>{
     await markChatLeaving((_id,candidate)=>windowId===chrome.windows.WINDOW_ID_NONE || candidate.windowId!==windowId,focusedAt);
     await promoteOnLeaving((_id,candidate)=>windowId===chrome.windows.WINDOW_ID_NONE || candidate.windowId!==windowId,focusedAt,!popupOpenAtEvent);
     if (windowId===chrome.windows.WINDOW_ID_NONE) return;
-    const [tab]=await chrome.tabs.query({active:true,windowId});
+    const tab=await activeTabInWindow(windowId);
     if (tab) await acknowledgeVisibleTab(tab.id,windowId);
   });
   if (windowId!==chrome.windows.WINDOW_ID_NONE) recheckVisibleTabSoon(windowId);
